@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import RoleGuard from '@/components/RoleGuard'
 
 type Kunde = {
   id: string
@@ -34,7 +35,7 @@ type Dokument = {
   created_at: string
 }
 
-export default function DokumentePage() {
+function DokumentePageContent() {
   const [kunden, setKunden] = useState<Kunde[]>([])
   const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([])
   const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([])
@@ -139,13 +140,6 @@ export default function DokumentePage() {
     setDatei(null)
 
     ladeAlles()
-  }
-
-  function aktuelleBezuege() {
-    if (bezugTyp === 'kunde') return kunden
-    if (bezugTyp === 'fahrzeug') return fahrzeuge
-    if (bezugTyp === 'mitarbeiter') return mitarbeiter
-    return []
   }
 
   function bezugAnzeigen(dokument: Dokument) {
@@ -270,5 +264,13 @@ export default function DokumentePage() {
 
       {fehler && <div className="error-box">Fehler: {fehler}</div>}
     </div>
+  )
+}
+
+export default function DokumentePage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme']}>
+      <DokumentePageContent />
+    </RoleGuard>
   )
 }

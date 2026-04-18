@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import RoleGuard from '@/components/RoleGuard'
 
 type Kunde = {
   id: string
@@ -27,7 +28,7 @@ type Zahlung = {
   referenz: string | null
 }
 
-export default function ZahlungenPage() {
+function ZahlungenPageContent() {
   const [kunden, setKunden] = useState<Kunde[]>([])
   const [rechnungen, setRechnungen] = useState<Rechnung[]>([])
   const [zahlungen, setZahlungen] = useState<Zahlung[]>([])
@@ -94,15 +95,15 @@ export default function ZahlungenPage() {
   }
 
   return (
-    <div>
+    <div className="page-card">
       <h1>Zahlungen</h1>
 
       <form onSubmit={zahlungAnlegen} style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div className="form-row">
           <select
             value={zahlungRechnungId}
             onChange={(e) => setZahlungRechnungId(e.target.value)}
-            style={{ padding: 8, minWidth: 260 }}
+            style={{ minWidth: 260 }}
           >
             <option value="">Rechnung auswählen</option>
             {rechnungen.map((rechnung) => {
@@ -119,13 +120,13 @@ export default function ZahlungenPage() {
             placeholder="Betrag"
             value={zahlungBetrag}
             onChange={(e) => setZahlungBetrag(e.target.value)}
-            style={{ padding: 8, minWidth: 120 }}
+            style={{ minWidth: 120 }}
           />
 
           <select
             value={zahlungArt}
             onChange={(e) => setZahlungArt(e.target.value)}
-            style={{ padding: 8, minWidth: 160 }}
+            style={{ minWidth: 160 }}
           >
             <option value="bar">bar</option>
             <option value="ec_karte">ec_karte</option>
@@ -138,7 +139,7 @@ export default function ZahlungenPage() {
           <select
             value={zahlungStatus}
             onChange={(e) => setZahlungStatus(e.target.value)}
-            style={{ padding: 8, minWidth: 160 }}
+            style={{ minWidth: 160 }}
           >
             <option value="gebucht">gebucht</option>
             <option value="vorgemerkt">vorgemerkt</option>
@@ -151,22 +152,20 @@ export default function ZahlungenPage() {
             placeholder="Referenz"
             value={zahlungReferenz}
             onChange={(e) => setZahlungReferenz(e.target.value)}
-            style={{ padding: 8, minWidth: 180 }}
+            style={{ minWidth: 180 }}
           />
         </div>
 
-        <button type="submit" style={{ padding: '8px 14px' }}>
-          Zahlung anlegen
-        </button>
+        <button type="submit">Zahlung anlegen</button>
       </form>
 
-      <ul>
+      <div>
         {zahlungen.map((zahlung) => {
           const rechnung = rechnungen.find((r) => r.id === zahlung.rechnung_id)
           const kunde = kunden.find((k) => k.id === rechnung?.kunde_id)
 
           return (
-            <li key={zahlung.id} style={{ marginBottom: 12 }}>
+            <div key={zahlung.id} className="list-box">
               <strong>
                 {kunde
                   ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
@@ -182,12 +181,20 @@ export default function ZahlungenPage() {
               Zahlungsdatum: {zahlung.zahlungsdatum || '-'}
               <br />
               Referenz: {zahlung.referenz || '-'}
-            </li>
+            </div>
           )
         })}
-      </ul>
+      </div>
 
-      {fehler && <p style={{ marginTop: 20 }}>Fehler: {fehler}</p>}
+      {fehler && <div className="error-box">Fehler: {fehler}</div>}
     </div>
+  )
+}
+
+export default function ZahlungenPage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Buchhaltung']}>
+      <ZahlungenPageContent />
+    </RoleGuard>
   )
 }

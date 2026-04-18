@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import RoleGuard from '@/components/RoleGuard'
 
 type Kunde = {
   id: string
@@ -28,7 +29,7 @@ type Serviceauftrag = {
   kilometerstand_bei_annahme: number | null
 }
 
-export default function ServiceauftraegePage() {
+function ServiceauftraegePageContent() {
   const [kunden, setKunden] = useState<Kunde[]>([])
   const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([])
   const [serviceauftraege, setServiceauftraege] = useState<Serviceauftrag[]>([])
@@ -101,18 +102,18 @@ export default function ServiceauftraegePage() {
   )
 
   return (
-    <div>
+    <div className="page-card">
       <h1>Serviceaufträge</h1>
 
       <form onSubmit={serviceauftragAnlegen} style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div className="form-row">
           <select
             value={auftragKundeId}
             onChange={(e) => {
               setAuftragKundeId(e.target.value)
               setAuftragFahrzeugId('')
             }}
-            style={{ padding: 8, minWidth: 220 }}
+            style={{ minWidth: 220 }}
           >
             <option value="">Kunde auswählen</option>
             {kunden.map((kunde) => (
@@ -125,7 +126,7 @@ export default function ServiceauftraegePage() {
           <select
             value={auftragFahrzeugId}
             onChange={(e) => setAuftragFahrzeugId(e.target.value)}
-            style={{ padding: 8, minWidth: 220 }}
+            style={{ minWidth: 220 }}
           >
             <option value="">Fahrzeug auswählen</option>
             {fahrzeugeZumGewaehltenKunden.map((fahrzeug) => (
@@ -138,7 +139,7 @@ export default function ServiceauftraegePage() {
           <select
             value={auftragArt}
             onChange={(e) => setAuftragArt(e.target.value)}
-            style={{ padding: 8, minWidth: 150 }}
+            style={{ minWidth: 150 }}
           >
             <option value="reparatur">Reparatur</option>
             <option value="wartung">Wartung</option>
@@ -151,7 +152,7 @@ export default function ServiceauftraegePage() {
           <select
             value={auftragStatus}
             onChange={(e) => setAuftragStatus(e.target.value)}
-            style={{ padding: 8, minWidth: 150 }}
+            style={{ minWidth: 150 }}
           >
             <option value="offen">offen</option>
             <option value="eingeplant">eingeplant</option>
@@ -167,7 +168,7 @@ export default function ServiceauftraegePage() {
             placeholder="Kilometerstand"
             value={kilometerstand}
             onChange={(e) => setKilometerstand(e.target.value)}
-            style={{ padding: 8, minWidth: 140 }}
+            style={{ minWidth: 140 }}
           />
         </div>
 
@@ -176,22 +177,20 @@ export default function ServiceauftraegePage() {
             placeholder="Fehlerbeschreibung"
             value={fehlerbeschreibung}
             onChange={(e) => setFehlerbeschreibung(e.target.value)}
-            style={{ padding: 8, width: '100%', minHeight: 90 }}
+            style={{ width: '100%', minHeight: 90 }}
           />
         </div>
 
-        <button type="submit" style={{ padding: '8px 14px' }}>
-          Serviceauftrag anlegen
-        </button>
+        <button type="submit">Serviceauftrag anlegen</button>
       </form>
 
-      <ul>
+      <div>
         {serviceauftraege.map((auftrag) => {
           const kunde = kunden.find((k) => k.id === auftrag.kunde_id)
           const fahrzeug = fahrzeuge.find((f) => f.id === auftrag.fahrzeug_id)
 
           return (
-            <li key={auftrag.id} style={{ marginBottom: 12 }}>
+            <div key={auftrag.id} className="list-box">
               <strong>
                 {kunde
                   ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
@@ -206,12 +205,20 @@ export default function ServiceauftraegePage() {
               Fehler: {auftrag.fehlerbeschreibung || '-'}
               <br />
               Kilometerstand: {auftrag.kilometerstand_bei_annahme ?? '-'}
-            </li>
+            </div>
           )
         })}
-      </ul>
+      </div>
 
-      {fehler && <p style={{ marginTop: 20 }}>Fehler: {fehler}</p>}
+      {fehler && <div className="error-box">Fehler: {fehler}</div>}
     </div>
+  )
+}
+
+export default function ServiceauftraegePage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme']}>
+      <ServiceauftraegePageContent />
+    </RoleGuard>
   )
 }

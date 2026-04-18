@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import RoleGuard from '@/components/RoleGuard'
 
 type Rang = {
   id: string
@@ -13,7 +14,7 @@ type Qualifikation = {
   name: string
 }
 
-export default function EinstellungenPage() {
+function EinstellungenPageContent() {
   const [raenge, setRaenge] = useState<Rang[]>([])
   const [qualifikationen, setQualifikationen] = useState<Qualifikation[]>([])
 
@@ -34,7 +35,7 @@ export default function EinstellungenPage() {
     ladeAlles()
   }, [])
 
-  async function rangAnlegen(e: any) {
+  async function rangAnlegen(e: React.FormEvent) {
     e.preventDefault()
 
     const { error } = await supabase.from('raenge').insert({
@@ -47,7 +48,7 @@ export default function EinstellungenPage() {
     ladeAlles()
   }
 
-  async function qualiAnlegen(e: any) {
+  async function qualiAnlegen(e: React.FormEvent) {
     e.preventDefault()
 
     const { error } = await supabase.from('qualifikationen').insert({
@@ -98,5 +99,13 @@ export default function EinstellungenPage() {
 
       {fehler && <div className="error-box">{fehler}</div>}
     </div>
+  )
+}
+
+export default function EinstellungenPage() {
+  return (
+    <RoleGuard allowedRoles={['Admin']}>
+      <EinstellungenPageContent />
+    </RoleGuard>
   )
 }

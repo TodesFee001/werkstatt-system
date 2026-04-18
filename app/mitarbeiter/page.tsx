@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import RoleGuard from '@/components/RoleGuard'
 
 type Mitarbeiter = {
   id: string
@@ -31,7 +32,7 @@ type MitarbeiterQualifikation = {
   qualifikation_id: string
 }
 
-export default function MitarbeiterPage() {
+function MitarbeiterPageContent() {
   const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([])
   const [raenge, setRaenge] = useState<Rang[]>([])
   const [qualifikationen, setQualifikationen] = useState<Qualifikation[]>([])
@@ -278,5 +279,13 @@ export default function MitarbeiterPage() {
 
       {fehler && <div className="error-box">Fehler: {fehler}</div>}
     </div>
+  )
+}
+
+export default function MitarbeiterPage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt']}>
+      <MitarbeiterPageContent />
+    </RoleGuard>
   )
 }

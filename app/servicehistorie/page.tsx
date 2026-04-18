@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import RoleGuard from '@/components/RoleGuard'
 
 type Kunde = {
   id: string
@@ -29,7 +30,7 @@ type Historie = {
   beschreibung: string | null
 }
 
-export default function ServicehistoriePage() {
+function ServicehistoriePageContent() {
   const [kunden, setKunden] = useState<Kunde[]>([])
   const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([])
   const [historie, setHistorie] = useState<Historie[]>([])
@@ -226,5 +227,13 @@ export default function ServicehistoriePage() {
 
       {fehler && <div className="error-box">Fehler: {fehler}</div>}
     </div>
+  )
+}
+
+export default function ServicehistoriePage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme']}>
+      <ServicehistoriePageContent />
+    </RoleGuard>
   )
 }

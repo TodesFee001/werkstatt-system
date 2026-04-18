@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import RoleGuard from '@/components/RoleGuard'
 
 type Mitarbeiter = {
   id: string
@@ -24,7 +25,7 @@ type Abwesenheit = {
   grund: string | null
 }
 
-export default function AbwesenheitenPage() {
+function AbwesenheitenPageContent() {
   const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([])
   const [typen, setTypen] = useState<Abwesenheitstyp[]>([])
   const [abwesenheiten, setAbwesenheiten] = useState<Abwesenheit[]>([])
@@ -210,5 +211,13 @@ export default function AbwesenheitenPage() {
 
       {fehler && <div className="error-box">Fehler: {fehler}</div>}
     </div>
+  )
+}
+
+export default function AbwesenheitenPage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt']}>
+      <AbwesenheitenPageContent />
+    </RoleGuard>
   )
 }
