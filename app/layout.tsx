@@ -1,16 +1,81 @@
+'use client'
+
 import Link from 'next/link'
 import './globals.css'
-
-export const metadata = {
-  title: 'Werkstatt System',
-  description: 'Werkstatt- und Service-System',
-}
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import { usePathname, useRouter } from 'next/navigation'
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const [eingeloggt, setEingeloggt] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    async function checkUser() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session && pathname !== '/login') {
+        router.push('/login')
+        setEingeloggt(false)
+        return
+      }
+
+      if (session && pathname === '/login') {
+        router.push('/')
+      }
+
+      setEingeloggt(!!session)
+    }
+
+    checkUser()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session && pathname !== '/login') {
+        router.push('/login')
+        setEingeloggt(false)
+      } else {
+        setEingeloggt(!!session)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [pathname, router])
+
+  async function logout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
+
+  if (eingeloggt === null && pathname !== '/login') {
+    return (
+      <html lang="de">
+        <body>
+          <div style={{ padding: 40 }}>Lade...</div>
+        </body>
+      </html>
+    )
+  }
+
+  if (pathname === '/login') {
+    return (
+      <html lang="de">
+        <body>{children}</body>
+      </html>
+    )
+  }
+
   return (
     <html lang="de">
       <body>
@@ -45,26 +110,36 @@ export default function RootLayout({
                 Zahlungen
               </Link>
               <Link href="/mitarbeiter" className="sidebar-link" style={{ color: 'white' }}>
-  Mitarbeiter
-</Link>
-<Link href="/einstellungen" className="sidebar-link" style={{ color: 'white' }}>
-  Einstellungen
-</Link>
-<Link href="/abwesenheiten" className="sidebar-link" style={{ color: 'white' }}>
-  Abwesenheiten
-</Link>
-<Link href="/dokumente" className="sidebar-link" style={{ color: 'white' }}>
-  Dokumente
-</Link>
-<Link href="/servicehistorie" className="sidebar-link" style={{ color: 'white' }}>
-  Fahrzeughistorie
-</Link>
+                Mitarbeiter
+              </Link>
+              <Link href="/einstellungen" className="sidebar-link" style={{ color: 'white' }}>
+                Einstellungen
+              </Link>
+              <Link href="/abwesenheiten" className="sidebar-link" style={{ color: 'white' }}>
+                Abwesenheiten
+              </Link>
+              <Link href="/dokumente" className="sidebar-link" style={{ color: 'white' }}>
+                Dokumente
+              </Link>
+              <Link href="/servicehistorie" className="sidebar-link" style={{ color: 'white' }}>
+                Fahrzeughistorie
+              </Link>
             </nav>
+
+            <div style={{ marginTop: 24 }}>
+              <button
+                onClick={logout}
+                style={{
+                  width: '100%',
+                  background: '#dc2626',
+                }}
+              >
+                Logout
+              </button>
+            </div>
           </aside>
 
-          <main style={{ flex: 1, padding: '24px' }}>
-            {children}
-          </main>
+          <main style={{ flex: 1, padding: '24px' }}>{children}</main>
         </div>
       </body>
     </html>
