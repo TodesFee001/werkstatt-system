@@ -48,6 +48,17 @@ function MitarbeiterPageContent() {
   const [rangId, setRangId] = useState('')
   const [gewaehlteQualifikationen, setGewaehlteQualifikationen] = useState<string[]>([])
 
+  const [bearbeitenId, setBearbeitenId] = useState<string | null>(null)
+  const [bearbeitenMitarbeiternummer, setBearbeitenMitarbeiternummer] = useState('')
+  const [bearbeitenVorname, setBearbeitenVorname] = useState('')
+  const [bearbeitenNachname, setBearbeitenNachname] = useState('')
+  const [bearbeitenEmail, setBearbeitenEmail] = useState('')
+  const [bearbeitenTelefon, setBearbeitenTelefon] = useState('')
+  const [bearbeitenEintrittsdatum, setBearbeitenEintrittsdatum] = useState('')
+  const [bearbeitenStatus, setBearbeitenStatus] = useState('aktiv')
+  const [bearbeitenRangId, setBearbeitenRangId] = useState('')
+  const [bearbeitenQualifikationen, setBearbeitenQualifikationen] = useState<string[]>([])
+
   const [fehler, setFehler] = useState('')
 
   async function ladeAlles() {
@@ -87,6 +98,12 @@ function MitarbeiterPageContent() {
 
   function toggleQualifikation(id: string) {
     setGewaehlteQualifikationen((prev) =>
+      prev.includes(id) ? prev.filter((q) => q !== id) : [...prev, id]
+    )
+  }
+
+  function toggleBearbeitenQualifikation(id: string) {
+    setBearbeitenQualifikationen((prev) =>
       prev.includes(id) ? prev.filter((q) => q !== id) : [...prev, id]
     )
   }
@@ -145,6 +162,108 @@ function MitarbeiterPageContent() {
     setStatus('aktiv')
     setRangId('')
     setGewaehlteQualifikationen([])
+
+    ladeAlles()
+  }
+
+  function bearbeitenStarten(person: Mitarbeiter) {
+    setBearbeitenId(person.id)
+    setBearbeitenMitarbeiternummer(person.mitarbeiternummer || '')
+    setBearbeitenVorname(person.vorname || '')
+    setBearbeitenNachname(person.nachname || '')
+    setBearbeitenEmail(person.email || '')
+    setBearbeitenTelefon(person.telefon || '')
+    setBearbeitenEintrittsdatum(person.eintrittsdatum || '')
+    setBearbeitenStatus(person.status || 'aktiv')
+    setBearbeitenRangId(person.rang_id || '')
+
+    const qualis = mitarbeiterQualifikationen
+      .filter((mq) => mq.mitarbeiter_id === person.id)
+      .map((mq) => mq.qualifikation_id)
+
+    setBearbeitenQualifikationen(qualis)
+  }
+
+  function bearbeitenAbbrechen() {
+    setBearbeitenId(null)
+    setBearbeitenMitarbeiternummer('')
+    setBearbeitenVorname('')
+    setBearbeitenNachname('')
+    setBearbeitenEmail('')
+    setBearbeitenTelefon('')
+    setBearbeitenEintrittsdatum('')
+    setBearbeitenStatus('aktiv')
+    setBearbeitenRangId('')
+    setBearbeitenQualifikationen([])
+  }
+
+  async function mitarbeiterSpeichern(e: React.FormEvent) {
+    e.preventDefault()
+    if (!bearbeitenId) return
+
+    const { error } = await supabase
+      .from('mitarbeiter')
+      .update({
+        mitarbeiternummer: bearbeitenMitarbeiternummer || null,
+        vorname: bearbeitenVorname,
+        nachname: bearbeitenNachname,
+        email: bearbeitenEmail || null,
+        telefon: bearbeitenTelefon || null,
+        eintrittsdatum: bearbeitenEintrittsdatum || null,
+        status: bearbeitenStatus,
+        rang_id: bearbeitenRangId || null,
+      })
+      .eq('id', bearbeitenId)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    await supabase
+      .from('mitarbeiter_qualifikationen')
+      .delete()
+      .eq('mitarbeiter_id', bearbeitenId)
+
+    if (bearbeitenQualifikationen.length > 0) {
+      const inserts = bearbeitenQualifikationen.map((qualifikationId) => ({
+        mitarbeiter_id: bearbeitenId,
+        qualifikation_id: qualifikationId,
+      }))
+
+      const { error: qualiError } = await supabase
+        .from('mitarbeiter_qualifikationen')
+        .insert(inserts)
+
+      if (qualiError) {
+        setFehler(qualiError.message)
+        return
+      }
+    }
+
+    bearbeitenAbbrechen()
+    ladeAlles()
+  }
+
+  async function mitarbeiterLoeschen(id: string) {
+    const bestaetigt = window.confirm('Mitarbeiter wirklich löschen?')
+    if (!bestaetigt) return
+
+    await supabase
+      .from('mitarbeiter_qualifikationen')
+      .delete()
+      .eq('mitarbeiter_id', id)
+
+    const { error } = await supabase.from('mitarbeiter').delete().eq('id', id)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    if (bearbeitenId === id) {
+      bearbeitenAbbrechen()
+    }
 
     ladeAlles()
   }
@@ -249,6 +368,92 @@ function MitarbeiterPageContent() {
         <button type="submit">Mitarbeiter anlegen</button>
       </form>
 
+      {bearbeitenId && (
+        <form onSubmit={mitarbeiterSpeichern} className="list-box" style={{ marginBottom: 20 }}>
+          <h3 style={{ marginTop: 0 }}>Mitarbeiter bearbeiten</h3>
+
+          <div className="form-row">
+            <input
+              placeholder="Mitarbeiternummer"
+              value={bearbeitenMitarbeiternummer}
+              onChange={(e) => setBearbeitenMitarbeiternummer(e.target.value)}
+            />
+            <input
+              placeholder="Vorname"
+              value={bearbeitenVorname}
+              onChange={(e) => setBearbeitenVorname(e.target.value)}
+            />
+            <input
+              placeholder="Nachname"
+              value={bearbeitenNachname}
+              onChange={(e) => setBearbeitenNachname(e.target.value)}
+            />
+            <input
+              placeholder="E-Mail"
+              value={bearbeitenEmail}
+              onChange={(e) => setBearbeitenEmail(e.target.value)}
+            />
+            <input
+              placeholder="Telefon"
+              value={bearbeitenTelefon}
+              onChange={(e) => setBearbeitenTelefon(e.target.value)}
+            />
+            <input
+              type="date"
+              value={bearbeitenEintrittsdatum}
+              onChange={(e) => setBearbeitenEintrittsdatum(e.target.value)}
+            />
+            <select
+              value={bearbeitenStatus}
+              onChange={(e) => setBearbeitenStatus(e.target.value)}
+            >
+              <option value="aktiv">aktiv</option>
+              <option value="inaktiv">inaktiv</option>
+              <option value="beurlaubt">beurlaubt</option>
+              <option value="ausgeschieden">ausgeschieden</option>
+            </select>
+            <select
+              value={bearbeitenRangId}
+              onChange={(e) => setBearbeitenRangId(e.target.value)}
+            >
+              <option value="">Rang auswählen</option>
+              {raenge.map((rang) => (
+                <option key={rang.id} value={rang.id}>
+                  {rang.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ marginTop: 16, marginBottom: 16 }}>
+            <strong>Qualifikationen</strong>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 10 }}>
+              {qualifikationen.map((quali) => (
+                <label key={quali.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={bearbeitenQualifikationen.includes(quali.id)}
+                    onChange={() => toggleBearbeitenQualifikation(quali.id)}
+                  />
+                  {quali.name}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-row">
+            <button type="submit">Speichern</button>
+            <button
+              type="button"
+              onClick={bearbeitenAbbrechen}
+              style={{ background: '#6b7280' }}
+            >
+              Abbrechen
+            </button>
+          </div>
+        </form>
+      )}
+
       <div>
         {mitarbeiter.map((person) => {
           const qualis = qualifikationenVonMitarbeiter(person.id)
@@ -272,6 +477,19 @@ function MitarbeiterPageContent() {
               Rang: {rangNameFinden(person.rang_id)}
               <br />
               Qualifikationen: {qualis.length > 0 ? qualis.join(', ') : '-'}
+
+              <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
+                <button type="button" onClick={() => bearbeitenStarten(person)}>
+                  Bearbeiten
+                </button>
+                <button
+                  type="button"
+                  onClick={() => mitarbeiterLoeschen(person.id)}
+                  style={{ background: '#dc2626' }}
+                >
+                  Löschen
+                </button>
+              </div>
             </div>
           )
         })}
