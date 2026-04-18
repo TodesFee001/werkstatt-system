@@ -68,9 +68,65 @@ function ZahlungenPageContent() {
     ladeZahlungen()
   }, [])
 
-  async function zahlungAnlegen(e: React.FormEvent) {
-    e.preventDefault()
-    setFehler('')
+async function zahlungAnlegen(e: React.FormEvent) {
+  e.preventDefault()
+  setFehler('')
+
+  if (!zahlungRechnungId) return setFehler('Bitte eine Rechnung auswählen.')
+  if (!zahlungBetrag) return setFehler('Bitte einen Betrag eingeben.')
+
+  const betrag = Number(zahlungBetrag)
+
+  // 1. Zahlung speichern
+  const { error } = await supabase.from('zahlungen').insert({
+    rechnung_id: zahlungRechnungId,
+    zahlungsdatum: new Date().toISOString().slice(0, 10),
+    betrag,
+    zahlungsart: zahlungArt,
+    status: zahlungStatus,
+    referenz: zahlungReferenz || null,
+  })
+
+  if (error) return setFehler(error.message)
+
+  // 2. Rechnung laden
+  const { data: rechnung } = await supabase
+    .from('rechnungen')
+    .select('*')
+    .eq('id', zahlungRechnungId)
+    .single()
+
+  if (!rechnung) return
+
+  const neuerOffenerBetrag =
+    (rechnung.offener_betrag || 0) - betrag
+
+  let neuerStatus = 'offen'
+
+  if (neuerOffenerBetrag <= 0) {
+    neuerStatus = 'bezahlt'
+  } else if (neuerOffenerBetrag < (rechnung.brutto_summe || 0)) {
+    neuerStatus = 'teilbezahlt'
+  }
+
+  // 3. Rechnung aktualisieren
+  await supabase
+    .from('rechnungen')
+    .update({
+      offener_betrag: Math.max(neuerOffenerBetrag, 0),
+      status: neuerStatus,
+    })
+    .eq('id', zahlungRechnungId)
+
+  // Reset
+  setZahlungRechnungId('')
+  setZahlungBetrag('')
+  setZahlungArt('bar')
+  setZahlungStatus('gebucht')
+  setZahlungReferenz('')
+
+  ladeZahlungen()
+}
 
     if (!zahlungRechnungId) return setFehler('Bitte eine Rechnung auswählen.')
     if (!zahlungBetrag) return setFehler('Bitte einen Betrag eingeben.')

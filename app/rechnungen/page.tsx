@@ -89,9 +89,14 @@ function RechnungenPageContent() {
     ladeRechnungen()
   }, [])
 
-  async function rechnungAnlegen(e: React.FormEvent) {
-    e.preventDefault()
-    setFehler('')
+if (rechnungServiceauftragId) {
+  await supabase
+    .from('serviceauftraege')
+    .update({
+      status: 'abgerechnet',
+    })
+    .eq('id', rechnungServiceauftragId)
+}
 
     if (!rechnungKundeId) return setFehler('Bitte einen Kunden auswählen.')
 
