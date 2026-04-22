@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import RoleGuard from '@/components/RoleGuard'
+import RoleGuard from '../components/RoleGuard'
+import StatusBadge from '../components/StatusBadge'
 
 type Kunde = {
   id: string
@@ -11,167 +12,190 @@ type Kunde = {
   firmenname: string | null
 }
 
-type Fahrzeug = {
-  id: string
-  kennzeichen: string | null
-  marke: string | null
-  modell: string | null
-  kunde_id: string | null
-}
-
-type Serviceauftrag = {
-  id: string
-  kunde_id: string | null
-  fahrzeug_id: string | null
-  status: string | null
-  art: string | null
-}
-
 type Rechnung = {
   id: string
+  rechnungsnummer: string | null
   kunde_id: string | null
-  serviceauftrag_id: string | null
   rechnungsdatum: string | null
   status: string | null
   brutto_summe: number | null
-  netto_summe: number | null
-  steuer_summe: number | null
   offener_betrag: number | null
+  interne_notiz: string | null
+  versendet_am: string | null
+  mahnstufe: number | null
+  faellig_am: string | null
+  letzte_mahnung_am: string | null
+  forderungsstatus: string | null
+  inkasso_am: string | null
 }
 
 function RechnungenPageContent() {
   const [kunden, setKunden] = useState<Kunde[]>([])
-  const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([])
-  const [serviceauftraege, setServiceauftraege] = useState<Serviceauftrag[]>([])
   const [rechnungen, setRechnungen] = useState<Rechnung[]>([])
-
-  const [rechnungKundeId, setRechnungKundeId] = useState('')
-  const [rechnungServiceauftragId, setRechnungServiceauftragId] = useState('')
-  const [rechnungStatus, setRechnungStatus] = useState('offen')
-  const [nettoSumme, setNettoSumme] = useState('')
-  const [steuerSumme, setSteuerSumme] = useState('')
-  const [bruttoSumme, setBruttoSumme] = useState('')
-  const [offenerBetrag, setOffenerBetrag] = useState('')
+  const [suche, setSuche] = useState('')
+  const [statusFilter, setStatusFilter] = useState('alle')
   const [fehler, setFehler] = useState('')
+  const [meldung, setMeldung] = useState('')
 
-  async function ladeKunden() {
-    const { data, error } = await supabase.from('kunden').select('*')
-    if (error) return setFehler(error.message)
-    setKunden(data || [])
-  }
+  async function ladeAlles() {
+    const [kundenRes, rechnungenRes] = await Promise.all([
+      supabase.from('kunden').select('*'),
+      supabase.from('rechnungen').select('*').order('created_at', { ascending: false }),
+    ])
 
-  async function ladeFahrzeuge() {
-    const { data, error } = await supabase.from('fahrzeuge').select('*')
-    if (error) return setFehler(error.message)
-    setFahrzeuge(data || [])
-  }
+    const error = kundenRes.error || rechnungenRes.error
+    if (error) {
+      setFehler(error.message)
+      return
+    }
 
-  async function ladeServiceauftraege() {
-    const { data, error } = await supabase.from('serviceauftraege').select('*')
-    if (error) return setFehler(error.message)
-    setServiceauftraege(data || [])
-  }
-
-  async function ladeRechnungen() {
-    const { data, error } = await supabase
-      .from('rechnungen')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) return setFehler(error.message)
-    setRechnungen(data || [])
+    setKunden(kundenRes.data || [])
+    setRechnungen(rechnungenRes.data || [])
   }
 
   useEffect(() => {
-    ladeKunden()
-    ladeFahrzeuge()
-    ladeServiceauftraege()
-    ladeRechnungen()
+    ladeAlles()
   }, [])
 
-if (rechnungServiceauftragId) {
-  await supabase
-    .from('serviceauftraege')
-    .update({
-      status: 'abgerechnet',
-    })
-    .eq('id', rechnungServiceauftragId)
-}
-
-    if (!rechnungKundeId) return setFehler('Bitte einen Kunden auswählen.')
-
-    const { error } = await supabase.from('rechnungen').insert({
-      kunde_id: rechnungKundeId,
-      serviceauftrag_id: rechnungServiceauftragId || null,
-      rechnungsdatum: new Date().toISOString().slice(0, 10),
-      status: rechnungStatus,
-      netto_summe: nettoSumme ? Number(nettoSumme) : 0,
-      steuer_summe: steuerSumme ? Number(steuerSumme) : 0,
-      brutto_summe: bruttoSumme ? Number(bruttoSumme) : 0,
-      offener_betrag: offenerBetrag ? Number(offenerBetrag) : 0,
-      zahlungsziel_tage: 14,
-      waehrung: 'EUR',
-    })
-
-    if (error) return setFehler(error.message)
-
-    setRechnungKundeId('')
-    setRechnungServiceauftragId('')
-    setRechnungStatus('offen')
-    setNettoSumme('')
-    setSteuerSumme('')
-    setBruttoSumme('')
-    setOffenerBetrag('')
-    ladeRechnungen()
+  function kundeName(id: string | null) {
+    if (!id) return 'Unbekannter Kunde'
+    const kunde = kunden.find((k) => k.id === id)
+    if (!kunde) return 'Unbekannter Kunde'
+    return kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
   }
 
-  const serviceauftraegeZumGewaehltenKunden = serviceauftraege.filter(
-    (s) => s.kunde_id === rechnungKundeId
-  )
+  async function alsBezahltMarkieren(rechnung: Rechnung) {
+    const { error } = await supabase
+      .from('rechnungen')
+      .update({
+        status: 'bezahlt',
+        offener_betrag: 0,
+        forderungsstatus: 'bezahlt',
+      })
+      .eq('id', rechnung.id)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    setMeldung(`${rechnung.rechnungsnummer || rechnung.id} wurde als bezahlt markiert.`)
+    ladeAlles()
+  }
+
+  async function alsUeberfaelligMarkieren(rechnung: Rechnung) {
+    const { error } = await supabase
+      .from('rechnungen')
+      .update({
+        status: 'ueberfaellig',
+        forderungsstatus: 'offen',
+      })
+      .eq('id', rechnung.id)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    setMeldung(`${rechnung.rechnungsnummer || rechnung.id} wurde als überfällig markiert.`)
+    ladeAlles()
+  }
+
+  async function mahnungErzeugen(rechnung: Rechnung) {
+    const neueStufe = Number(rechnung.mahnstufe || 0) + 1
+    const betreff = `Mahnung Stufe ${neueStufe} zu Rechnung ${rechnung.rechnungsnummer || rechnung.id}`
+    const text = `Offener Betrag: ${Number(rechnung.offener_betrag || 0).toFixed(2)} €. Zahlung intern nachverfolgen.`
+
+    const { error: mahnungError } = await supabase.from('mahnungen').insert({
+      rechnung_id: rechnung.id,
+      mahnstufe: neueStufe,
+      betreff,
+      text,
+      status: 'erstellt',
+    })
+
+    if (mahnungError) {
+      setFehler(mahnungError.message)
+      return
+    }
+
+    let neuerForderungsstatus = 'zahlungserinnerung'
+    if (neueStufe === 1) neuerForderungsstatus = 'mahnung_1'
+    if (neueStufe === 2) neuerForderungsstatus = 'mahnung_2'
+    if (neueStufe >= 3) neuerForderungsstatus = 'mahnung_3'
+
+    const { error: rechnungError } = await supabase
+      .from('rechnungen')
+      .update({
+        mahnstufe: neueStufe,
+        letzte_mahnung_am: new Date().toISOString(),
+        status: 'ueberfaellig',
+        forderungsstatus: neuerForderungsstatus,
+      })
+      .eq('id', rechnung.id)
+
+    if (rechnungError) {
+      setFehler(rechnungError.message)
+      return
+    }
+
+    setMeldung(`Mahnung Stufe ${neueStufe} für ${rechnung.rechnungsnummer || rechnung.id} erstellt.`)
+    ladeAlles()
+  }
+
+  const gefiltert = useMemo(() => {
+    const q = suche.trim().toLowerCase()
+
+    return rechnungen.filter((r) => {
+      const statusOk = statusFilter === 'alle' || (r.status || '') === statusFilter
+      if (!statusOk) return false
+
+      if (!q) return true
+
+      return [r.rechnungsnummer, r.status, r.id, kundeName(r.kunde_id), r.forderungsstatus]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    })
+  }, [rechnungen, suche, statusFilter, kunden])
+
+  const gesamtumsatz = gefiltert.reduce((sum, r) => sum + Number(r.brutto_summe || 0), 0)
+  const gesamtOffen = gefiltert.reduce((sum, r) => sum + Number(r.offener_betrag || 0), 0)
 
   return (
-    <div className="page-card">
-      <h1>Rechnungen</h1>
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div className="topbar">
+        <div>
+          <h1 className="topbar-title">Rechnungen</h1>
+          <div className="topbar-subtitle">
+            Überblick über Rechnungsstatus, Mahnstufen und offene Beträge.
+          </div>
+        </div>
+      </div>
 
-      <form onSubmit={rechnungAnlegen} style={{ marginBottom: 24 }}>
+      <div className="kpi-strip">
+        <div className="kpi-pill">
+          Rechnungen
+          <strong>{gefiltert.length}</strong>
+        </div>
+        <div className="kpi-pill">
+          Bruttovolumen
+          <strong>{gesamtumsatz.toFixed(2)} €</strong>
+        </div>
+        <div className="kpi-pill">
+          Offen gesamt
+          <strong>{gesamtOffen.toFixed(2)} €</strong>
+        </div>
+      </div>
+
+      <div className="page-card">
         <div className="form-row">
-          <select
-            value={rechnungKundeId}
-            onChange={(e) => {
-              setRechnungKundeId(e.target.value)
-              setRechnungServiceauftragId('')
-            }}
-            style={{ minWidth: 220 }}
-          >
-            <option value="">Kunde auswählen</option>
-            {kunden.map((kunde) => (
-              <option key={kunde.id} value={kunde.id}>
-                {kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={rechnungServiceauftragId}
-            onChange={(e) => setRechnungServiceauftragId(e.target.value)}
-            style={{ minWidth: 260 }}
-          >
-            <option value="">Serviceauftrag auswählen</option>
-            {serviceauftraegeZumGewaehltenKunden.map((auftrag) => {
-              const fahrzeug = fahrzeuge.find((f) => f.id === auftrag.fahrzeug_id)
-              return (
-                <option key={auftrag.id} value={auftrag.id}>
-                  {(fahrzeug?.kennzeichen || '-')} – {auftrag.art || '-'} – {auftrag.status || '-'}
-                </option>
-              )
-            })}
-          </select>
-
-          <select
-            value={rechnungStatus}
-            onChange={(e) => setRechnungStatus(e.target.value)}
-            style={{ minWidth: 160 }}
-          >
+          <input
+            placeholder="Rechnungen suchen"
+            value={suche}
+            onChange={(e) => setSuche(e.target.value)}
+          />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="alle">Alle Status</option>
             <option value="entwurf">entwurf</option>
             <option value="offen">offen</option>
             <option value="teilbezahlt">teilbezahlt</option>
@@ -179,64 +203,105 @@ if (rechnungServiceauftragId) {
             <option value="ueberfaellig">ueberfaellig</option>
             <option value="storniert">storniert</option>
           </select>
-
-          <input
-            placeholder="Netto"
-            value={nettoSumme}
-            onChange={(e) => setNettoSumme(e.target.value)}
-            style={{ minWidth: 120 }}
-          />
-          <input
-            placeholder="Steuer"
-            value={steuerSumme}
-            onChange={(e) => setSteuerSumme(e.target.value)}
-            style={{ minWidth: 120 }}
-          />
-          <input
-            placeholder="Brutto"
-            value={bruttoSumme}
-            onChange={(e) => setBruttoSumme(e.target.value)}
-            style={{ minWidth: 120 }}
-          />
-          <input
-            placeholder="Offener Betrag"
-            value={offenerBetrag}
-            onChange={(e) => setOffenerBetrag(e.target.value)}
-            style={{ minWidth: 140 }}
-          />
         </div>
-
-        <button type="submit">Rechnung anlegen</button>
-      </form>
-
-      <div>
-        {rechnungen.map((rechnung) => {
-          const kunde = kunden.find((k) => k.id === rechnung.kunde_id)
-          const serviceauftrag = serviceauftraege.find((s) => s.id === rechnung.serviceauftrag_id)
-          const fahrzeug = fahrzeuge.find((f) => f.id === serviceauftrag?.fahrzeug_id)
-
-          return (
-            <div key={rechnung.id} className="list-box">
-              <strong>
-                {kunde
-                  ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
-                  : 'Unbekannter Kunde'}
-              </strong>{' '}
-              – {fahrzeug ? `${fahrzeug.kennzeichen || '-'} – ${fahrzeug.marke || '-'} ${fahrzeug.modell || '-'}` : 'ohne Fahrzeug'}
-              <br />
-              Status: {rechnung.status || '-'}
-              <br />
-              Rechnungsdatum: {rechnung.rechnungsdatum || '-'}
-              <br />
-              Netto: {rechnung.netto_summe ?? 0} € | Steuer: {rechnung.steuer_summe ?? 0} € | Brutto: {rechnung.brutto_summe ?? 0} €
-              <br />
-              Offener Betrag: {rechnung.offener_betrag ?? 0} €
-            </div>
-          )
-        })}
       </div>
 
-      {fehler && <div className="error-box">Fehler: {fehler}</div>}
+      <div>
+        {gefiltert.map((rechnung) => (
+          <div key={rechnung.id} className="list-box">
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div>
+                <strong>{rechnung.rechnungsnummer || rechnung.id}</strong>
+                <br />
+                Kunde: {kundeName(rechnung.kunde_id)}
+                <br />
+                Rechnungsdatum: {rechnung.rechnungsdatum || '-'}
+                <br />
+                Fällig am: {rechnung.faellig_am || '-'}
+                <br />
+                Brutto: {Number(rechnung.brutto_summe || 0).toFixed(2)} €
+                <br />
+                Offen: {Number(rechnung.offener_betrag || 0).toFixed(2)} €
+                <br />
+                Mahnstufe: {rechnung.mahnstufe || 0}
+                <br />
+                Forderungsstatus: {rechnung.forderungsstatus || 'offen'}
+                <br />
+                Letzte Mahnung:{' '}
+                {rechnung.letzte_mahnung_am
+                  ? new Date(rechnung.letzte_mahnung_am).toLocaleString('de-DE')
+                  : '-'}
+                <br />
+                Inkasso am:{' '}
+                {rechnung.inkasso_am
+                  ? new Date(rechnung.inkasso_am).toLocaleString('de-DE')
+                  : '-'}
+                <br />
+                Interne Notiz: {rechnung.interne_notiz || '-'}
+              </div>
+
+              <div>
+                <StatusBadge status={rechnung.status} />
+              </div>
+            </div>
+
+            <div className="action-row">
+              <button type="button" onClick={() => alsBezahltMarkieren(rechnung)}>
+                Als bezahlt markieren
+              </button>
+
+              <button type="button" onClick={() => alsUeberfaelligMarkieren(rechnung)}>
+                Als überfällig markieren
+              </button>
+
+              <button type="button" onClick={() => mahnungErzeugen(rechnung)}>
+                Mahnung erzeugen
+              </button>
+
+              <a
+                href={`/mahnungen?rechnung=${rechnung.id}`}
+                style={{
+                  display: 'inline-block',
+                  padding: '10px 16px',
+                  background: '#7c3aed',
+                  color: 'white',
+                  borderRadius: 12,
+                  textDecoration: 'none',
+                }}
+              >
+                Mahnverlauf
+              </a>
+
+              <a
+                href={`/rechnungen/${rechnung.id}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-block',
+                  padding: '10px 16px',
+                  background: '#2563eb',
+                  color: 'white',
+                  borderRadius: 12,
+                  textDecoration: 'none',
+                }}
+              >
+                PDF / Druckansicht
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {meldung && <div className="badge badge-success">{meldung}</div>}
+      {fehler && <div className="error-box">{fehler}</div>}
     </div>
   )
 }

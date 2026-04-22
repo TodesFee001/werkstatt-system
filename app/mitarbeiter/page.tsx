@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import RoleGuard from '@/components/RoleGuard'
+import RoleGuard from '../components/RoleGuard'
 
 type Mitarbeiter = {
   id: string
@@ -82,7 +82,13 @@ function MitarbeiterPageContent() {
       .select('*')
 
     if (mError || rError || qError || mqError) {
-      setFehler(mError?.message || rError?.message || qError?.message || mqError?.message || 'Fehler')
+      setFehler(
+        mError?.message ||
+          rError?.message ||
+          qError?.message ||
+          mqError?.message ||
+          'Fehler'
+      )
       return
     }
 

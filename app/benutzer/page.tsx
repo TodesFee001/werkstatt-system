@@ -1,201 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import RoleGuard from '../components/RoleGuard'
 import { supabase } from '@/lib/supabase'
-import RoleGuard from '@/components/RoleGuard'
 
-type Rolle = {
+type Benutzer = {
   id: string
-  name: string
-  beschreibung: string | null
-}
-
-type Mitarbeiter = {
-  id: string
-  vorname: string
-  nachname: string
-}
-
-type AuthUser = {
-  id: string
-  email?: string
-}
-
-type Benutzerprofil = {
-  id: string
-  mitarbeiter_id: string | null
-  rolle_id: string | null
-}
-
-function BenutzerPageContent() {
-  const [rollen, setRollen] = useState<Rolle[]>([])
-  const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([])
-  const [profile, setProfile] = useState<Benutzerprofil[]>([])
-  const [user, setUser] = useState<AuthUser | null>(null)
-
-  const [rolleId, setRolleId] = useState('')
-  const [mitarbeiterId, setMitarbeiterId] = useState('')
-  const [fehler, setFehler] = useState('')
-
-  async function ladeAlles() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    const { data: rollenData, error: rollenError } = await supabase
-      .from('rollen')
-      .select('*')
-      .order('name', { ascending: true })
-
-    const { data: mitarbeiterData, error: mitarbeiterError } = await supabase
-      .from('mitarbeiter')
-      .select('id, vorname, nachname')
-      .order('vorname', { ascending: true })
-
-    const { data: profilData, error: profilError } = await supabase
-      .from('benutzerprofile')
-      .select('*')
-
-    if (rollenError || mitarbeiterError || profilError) {
-      setFehler(
-        rollenError?.message ||
-          mitarbeiterError?.message ||
-          profilError?.message ||
-          'Fehler'
-      )
-      return
-    }
-
-    setUser(user ? { id: user.id, email: user.email } : null)
-    setRollen(rollenData || [])
-    setMitarbeiter(mitarbeiterData || [])
-    setProfile(profilData || [])
-  }
-
-  useEffect(() => {
-    ladeAlles()
-  }, [])
-
-  async function profilSpeichern(e: React.FormEvent) {
-    e.preventDefault()
-    setFehler('')
-
-    if (!user) {
-      setFehler('Kein eingeloggter Benutzer gefunden.')
-      return
-    }
-
-    if (!rolleId) {
-      setFehler('Bitte eine Rolle auswählen.')
-      return
-    }
-
-    const bestehendesProfil = profile.find((p) => p.id === user.id)
-
-    if (bestehendesProfil) {
-      const { error } = await supabase
-        .from('benutzerprofile')
-        .update({
-          rolle_id: rolleId,
-          mitarbeiter_id: mitarbeiterId || null,
-        })
-        .eq('id', user.id)
-
-      if (error) {
-        setFehler(error.message)
-        return
-      }
-    } else {
-      const { error } = await supabase.from('benutzerprofile').insert({
-        id: user.id,
-        rolle_id: rolleId,
-        mitarbeiter_id: mitarbeiterId || null,
-      })
-
-      if (error) {
-        setFehler(error.message)
-        return
-      }
-    }
-
-    ladeAlles()
-  }
-
-  function rollenName(id: string | null) {
-    if (!id) return '-'
-    return rollen.find((r) => r.id === id)?.name || '-'
-  }
-
-  function mitarbeiterName(id: string | null) {
-    if (!id) return '-'
-    const person = mitarbeiter.find((m) => m.id === id)
-    return person ? `${person.vorname} ${person.nachname}` : '-'
-  }
-
-  const eigenesProfil = user ? profile.find((p) => p.id === user.id) : null
-
-  return (
-    <div className="page-card">
-      <h1>Benutzer & Rollen</h1>
-
-      <div className="list-box" style={{ marginBottom: 20 }}>
-        <strong>Aktueller Login</strong>
-        <br />
-        Benutzer-ID: {user?.id || '-'}
-        <br />
-        E-Mail: {user?.email || '-'}
-        <br />
-        Aktuelle Rolle: {rollenName(eigenesProfil?.rolle_id || null)}
-        <br />
-        Verknüpfter Mitarbeiter: {mitarbeiterName(eigenesProfil?.mitarbeiter_id || null)}
-      </div>
-
-      <form onSubmit={profilSpeichern} style={{ marginBottom: 24 }}>
-        <div className="form-row">
-          <select
-            value={rolleId}
-            onChange={(e) => setRolleId(e.target.value)}
-            style={{ minWidth: 220 }}
-          >
-            <option value="">Rolle auswählen</option>
-            {rollen.map((rolle) => (
-              <option key={rolle.id} value={rolle.id}>
-                {rolle.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={mitarbeiterId}
-            onChange={(e) => setMitarbeiterId(e.target.value)}
-            style={{ minWidth: 240 }}
-          >
-            <option value="">Mitarbeiter verknüpfen</option>
-            {mitarbeiter.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.vorname} {person.nachname}
-              </option>
-            ))}
-          </select>
-
-          <button type="submit">Benutzerprofil speichern</button>
-        </div>
-      </form>
-
-      <h2>Verfügbare Rollen</h2>
-      <div>
-        {rollen.map((rolle) => (
-          <div key={rolle.id} className="list-box">
-            <strong>{rolle.name}</strong>
-            <br />
-            {rolle.beschreibung || '-'}
-          </div>
-        ))}
-      </div>
-
-      {fehler && <div className="error-box">Fehler: {fehler}</div>}
-    </div>
-  )
+  benutzername: string | null
+  auth_email: string | null
+  rolle: string | null
+  aktiv: boolean | null
+  erstellt_am: string | null
+  letzter_login: string | null
 }
 
 export default function BenutzerPage() {
@@ -203,5 +19,230 @@ export default function BenutzerPage() {
     <RoleGuard allowedRoles={['Admin']}>
       <BenutzerPageContent />
     </RoleGuard>
+  )
+}
+
+function BenutzerPageContent() {
+  const [benutzer, setBenutzer] = useState<Benutzer[]>([])
+  const [benutzername, setBenutzername] = useState('')
+  const [passwort, setPasswort] = useState('')
+  const [rolle, setRolle] = useState('Werkstatt')
+  const [fehler, setFehler] = useState('')
+  const [meldung, setMeldung] = useState('')
+  const [laedt, setLaedt] = useState(false)
+
+  async function ladeBenutzer() {
+    const { data, error } = await supabase
+      .from('benutzerprofile')
+      .select('*')
+      .order('erstellt_am', { ascending: false })
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    setBenutzer(data || [])
+  }
+
+  useEffect(() => {
+    ladeBenutzer()
+  }, [])
+
+  async function benutzerAnlegen(e: React.FormEvent) {
+    e.preventDefault()
+    setFehler('')
+    setMeldung('')
+    setLaedt(true)
+
+    try {
+      if (!benutzername.trim()) {
+        setFehler('Bitte einen Benutzernamen eingeben.')
+        setLaedt(false)
+        return
+      }
+
+      if (passwort.length < 6) {
+        setFehler('Das Passwort muss mindestens 6 Zeichen lang sein.')
+        setLaedt(false)
+        return
+      }
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
+
+      if (sessionError) {
+        setFehler(sessionError.message)
+        setLaedt(false)
+        return
+      }
+
+      if (!session?.access_token) {
+        setFehler('Keine aktive Session gefunden. Bitte neu einloggen.')
+        setLaedt(false)
+        return
+      }
+
+      const res = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          benutzername,
+          passwort,
+          rolle,
+        }),
+      })
+
+      const contentType = res.headers.get('content-type') || ''
+
+      if (!contentType.includes('application/json')) {
+        const text = await res.text()
+        setFehler(
+          `API liefert kein JSON zurück. Wahrscheinlich Route/Pfad/Serverfehler. Antwort beginnt mit: ${text.slice(
+            0,
+            120
+          )}`
+        )
+        setLaedt(false)
+        return
+      }
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setFehler(data.error || 'Benutzer konnte nicht erstellt werden.')
+        setLaedt(false)
+        return
+      }
+
+      setBenutzername('')
+      setPasswort('')
+      setRolle('Werkstatt')
+      setMeldung(data.message || `Benutzer ${data.benutzername} wurde erstellt.`)
+      await ladeBenutzer()
+    } catch (error: any) {
+      setFehler(error?.message || 'Unbekannter Fehler beim Erstellen des Benutzers.')
+    }
+
+    setLaedt(false)
+  }
+
+  async function rolleAendern(id: string, neueRolle: string) {
+    setFehler('')
+    setMeldung('')
+
+    const { error } = await supabase
+      .from('benutzerprofile')
+      .update({ rolle: neueRolle })
+      .eq('id', id)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    setMeldung('Rolle aktualisiert.')
+    ladeBenutzer()
+  }
+
+  async function aktivToggle(id: string, aktiv: boolean) {
+    setFehler('')
+    setMeldung('')
+
+    const { error } = await supabase
+      .from('benutzerprofile')
+      .update({ aktiv: !aktiv })
+      .eq('id', id)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    setMeldung(!aktiv ? 'Benutzer aktiviert.' : 'Benutzer deaktiviert.')
+    ladeBenutzer()
+  }
+
+  return (
+    <div className="page-card">
+      <h1>Benutzerverwaltung</h1>
+
+      <form onSubmit={benutzerAnlegen} className="list-box">
+        <h3>Neuen Benutzer anlegen</h3>
+
+        <div className="form-row">
+          <input
+            placeholder="Benutzername"
+            value={benutzername}
+            onChange={(e) => setBenutzername(e.target.value)}
+          />
+
+          <input
+            type="password"
+            placeholder="Passwort"
+            value={passwort}
+            onChange={(e) => setPasswort(e.target.value)}
+          />
+
+          <select value={rolle} onChange={(e) => setRolle(e.target.value)}>
+            <option>Admin</option>
+            <option>Werkstatt</option>
+            <option>Serviceannahme</option>
+            <option>Buchhaltung</option>
+            <option>Lager</option>
+            <option>Behördenvertreter</option>
+          </select>
+        </div>
+
+        <div className="action-row">
+          <button type="submit" disabled={laedt}>
+            {laedt ? 'Erstelle...' : 'Benutzer erstellen'}
+          </button>
+        </div>
+      </form>
+
+      <h2>Bestehende Benutzer</h2>
+
+      {benutzer.map((b) => (
+        <div key={b.id} className="list-box">
+          <strong>{b.benutzername || b.id}</strong>
+          <br />
+          Rolle: {b.rolle}
+          <br />
+          Aktiv: {b.aktiv ? 'Ja' : 'Nein'}
+          <br />
+          Letzter Login:{' '}
+          {b.letzter_login
+            ? new Date(b.letzter_login).toLocaleString('de-DE')
+            : '-'}
+
+          <div className="action-row">
+            <select
+              value={b.rolle || ''}
+              onChange={(e) => rolleAendern(b.id, e.target.value)}
+            >
+              <option>Admin</option>
+              <option>Werkstatt</option>
+              <option>Serviceannahme</option>
+              <option>Buchhaltung</option>
+              <option>Lager</option>
+              <option>Behördenvertreter</option>
+            </select>
+
+            <button type="button" onClick={() => aktivToggle(b.id, !!b.aktiv)}>
+              {b.aktiv ? 'Deaktivieren' : 'Aktivieren'}
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {meldung && <div className="badge badge-success">{meldung}</div>}
+      {fehler && <div className="error-box">{fehler}</div>}
+    </div>
   )
 }

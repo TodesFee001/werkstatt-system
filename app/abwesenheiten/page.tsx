@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import RoleGuard from '@/components/RoleGuard'
+import RoleGuard from '../components/RoleGuard'
 
 type Mitarbeiter = {
   id: string
@@ -36,6 +36,15 @@ function AbwesenheitenPageContent() {
   const [bisDatum, setBisDatum] = useState('')
   const [status, setStatus] = useState('beantragt')
   const [grund, setGrund] = useState('')
+
+  const [bearbeitenId, setBearbeitenId] = useState<string | null>(null)
+  const [bearbeitenMitarbeiterId, setBearbeitenMitarbeiterId] = useState('')
+  const [bearbeitenTypId, setBearbeitenTypId] = useState('')
+  const [bearbeitenVonDatum, setBearbeitenVonDatum] = useState('')
+  const [bearbeitenBisDatum, setBearbeitenBisDatum] = useState('')
+  const [bearbeitenStatus, setBearbeitenStatus] = useState('beantragt')
+  const [bearbeitenGrund, setBearbeitenGrund] = useState('')
+
   const [fehler, setFehler] = useState('')
 
   async function ladeAlles() {
@@ -107,6 +116,72 @@ function AbwesenheitenPageContent() {
     setBisDatum('')
     setStatus('beantragt')
     setGrund('')
+    ladeAlles()
+  }
+
+  function bearbeitenStarten(eintrag: Abwesenheit) {
+    setBearbeitenId(eintrag.id)
+    setBearbeitenMitarbeiterId(eintrag.mitarbeiter_id || '')
+    setBearbeitenTypId(eintrag.abwesenheitstyp_id || '')
+    setBearbeitenVonDatum(eintrag.von_datum || '')
+    setBearbeitenBisDatum(eintrag.bis_datum || '')
+    setBearbeitenStatus(eintrag.status || 'beantragt')
+    setBearbeitenGrund(eintrag.grund || '')
+  }
+
+  function bearbeitenAbbrechen() {
+    setBearbeitenId(null)
+    setBearbeitenMitarbeiterId('')
+    setBearbeitenTypId('')
+    setBearbeitenVonDatum('')
+    setBearbeitenBisDatum('')
+    setBearbeitenStatus('beantragt')
+    setBearbeitenGrund('')
+  }
+
+  async function abwesenheitSpeichern(e: React.FormEvent) {
+    e.preventDefault()
+    if (!bearbeitenId) return
+
+    const { error } = await supabase
+      .from('abwesenheiten')
+      .update({
+        mitarbeiter_id: bearbeitenMitarbeiterId || null,
+        abwesenheitstyp_id: bearbeitenTypId || null,
+        von_datum: bearbeitenVonDatum,
+        bis_datum: bearbeitenBisDatum,
+        status: bearbeitenStatus,
+        grund: bearbeitenGrund || null,
+      })
+      .eq('id', bearbeitenId)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    bearbeitenAbbrechen()
+    ladeAlles()
+  }
+
+  async function abwesenheitLoeschen(id: string) {
+    const bestaetigt = window.confirm('Abwesenheit wirklich löschen?')
+    if (!bestaetigt) return
+
+    const { error } = await supabase
+      .from('abwesenheiten')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    if (bearbeitenId === id) {
+      bearbeitenAbbrechen()
+    }
+
     ladeAlles()
   }
 
@@ -191,6 +266,80 @@ function AbwesenheitenPageContent() {
         <button type="submit">Abwesenheit anlegen</button>
       </form>
 
+      {bearbeitenId && (
+        <form onSubmit={abwesenheitSpeichern} className="list-box" style={{ marginBottom: 20 }}>
+          <h3 style={{ marginTop: 0 }}>Abwesenheit bearbeiten</h3>
+
+          <div className="form-row">
+            <select
+              value={bearbeitenMitarbeiterId}
+              onChange={(e) => setBearbeitenMitarbeiterId(e.target.value)}
+            >
+              <option value="">Mitarbeiter auswählen</option>
+              {mitarbeiter.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.vorname} {person.nachname}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={bearbeitenTypId}
+              onChange={(e) => setBearbeitenTypId(e.target.value)}
+            >
+              <option value="">Abwesenheitstyp auswählen</option>
+              {typen.map((typ) => (
+                <option key={typ.id} value={typ.id}>
+                  {typ.name}
+                </option>
+              ))}
+            </select>
+
+            <input
+              type="date"
+              value={bearbeitenVonDatum}
+              onChange={(e) => setBearbeitenVonDatum(e.target.value)}
+            />
+
+            <input
+              type="date"
+              value={bearbeitenBisDatum}
+              onChange={(e) => setBearbeitenBisDatum(e.target.value)}
+            />
+
+            <select
+              value={bearbeitenStatus}
+              onChange={(e) => setBearbeitenStatus(e.target.value)}
+            >
+              <option value="beantragt">beantragt</option>
+              <option value="genehmigt">genehmigt</option>
+              <option value="abgelehnt">abgelehnt</option>
+              <option value="storniert">storniert</option>
+            </select>
+          </div>
+
+          <div style={{ marginTop: 12, marginBottom: 12 }}>
+            <textarea
+              placeholder="Grund / Notiz"
+              value={bearbeitenGrund}
+              onChange={(e) => setBearbeitenGrund(e.target.value)}
+              style={{ width: '100%', minHeight: 90 }}
+            />
+          </div>
+
+          <div className="form-row">
+            <button type="submit">Speichern</button>
+            <button
+              type="button"
+              onClick={bearbeitenAbbrechen}
+              style={{ background: '#6b7280' }}
+            >
+              Abbrechen
+            </button>
+          </div>
+        </form>
+      )}
+
       <div>
         {abwesenheiten.map((eintrag) => (
           <div key={eintrag.id} className="list-box">
@@ -205,6 +354,19 @@ function AbwesenheitenPageContent() {
             Status: {eintrag.status || '-'}
             <br />
             Grund: {eintrag.grund || '-'}
+
+            <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
+              <button type="button" onClick={() => bearbeitenStarten(eintrag)}>
+                Bearbeiten
+              </button>
+              <button
+                type="button"
+                onClick={() => abwesenheitLoeschen(eintrag.id)}
+                style={{ background: '#dc2626' }}
+              >
+                Löschen
+              </button>
+            </div>
           </div>
         ))}
       </div>
