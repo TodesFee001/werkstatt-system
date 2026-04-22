@@ -1,19 +1,18 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function BehoerdenAuditTracker() {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
   const lastLoggedRef = useRef<string>('')
 
   useEffect(() => {
     async function logge() {
-      const fullPath = `${pathname}${
-        searchParams?.toString() ? `?${searchParams.toString()}` : ''
-      }`
+      if (typeof window === 'undefined') return
+
+      const fullPath = `${pathname}${window.location.search || ''}`
 
       if (lastLoggedRef.current === fullPath) return
       lastLoggedRef.current = fullPath
@@ -23,14 +22,14 @@ export default function BehoerdenAuditTracker() {
         p_pfad: fullPath,
         p_details: {
           seite: pathname,
-          query: searchParams?.toString() || '',
+          query: window.location.search || '',
           zeitpunkt: new Date().toISOString(),
         },
       })
     }
 
     logge()
-  }, [pathname, searchParams])
+  }, [pathname])
 
   return null
 }

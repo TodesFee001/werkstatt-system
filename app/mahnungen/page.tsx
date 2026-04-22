@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import RoleGuard from '../components/RoleGuard'
 import StatusBadge from '../components/StatusBadge'
 import { supabase } from '@/lib/supabase'
@@ -42,20 +41,27 @@ export default function MahnungenPage() {
 }
 
 function MahnungenPageContent() {
-  const params = useSearchParams()
-  const rechnungFilter = params.get('rechnung') || ''
+  const [rechnungFilter, setRechnungFilter] = useState('')
 
   const [rechnungen, setRechnungen] = useState<Rechnung[]>([])
   const [kunden, setKunden] = useState<Kunde[]>([])
   const [mahnungen, setMahnungen] = useState<Mahnung[]>([])
 
-  const [rechnungId, setRechnungId] = useState(rechnungFilter)
+  const [rechnungId, setRechnungId] = useState('')
   const [betreff, setBetreff] = useState('')
   const [text, setText] = useState('')
   const [notiz, setNotiz] = useState('')
 
   const [fehler, setFehler] = useState('')
   const [meldung, setMeldung] = useState('')
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const rechnung = params.get('rechnung') || ''
+    setRechnungFilter(rechnung)
+    setRechnungId(rechnung)
+  }, [])
 
   async function laden() {
     const [rRes, kRes, mRes] = await Promise.all([
@@ -69,9 +75,9 @@ function MahnungenPageContent() {
       return
     }
 
-    setRechnungen(rRes.data || [])
-    setKunden(kRes.data || [])
-    setMahnungen(mRes.data || [])
+    setRechnungen((rRes.data || []) as Rechnung[])
+    setKunden((kRes.data || []) as Kunde[])
+    setMahnungen((mRes.data || []) as Mahnung[])
   }
 
   useEffect(() => {
@@ -153,7 +159,6 @@ function MahnungenPageContent() {
       return
     }
 
-    setRechnungId(rechnungFilter || '')
     setBetreff('')
     setText('')
     setNotiz('')
@@ -201,7 +206,8 @@ function MahnungenPageContent() {
               .filter((r) => Number(r.offener_betrag || 0) > 0)
               .map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.rechnungsnummer || r.id} – {kundeName(r.kunde_id)} – offen {Number(r.offener_betrag || 0).toFixed(2)} €
+                  {r.rechnungsnummer || r.id} – {kundeName(r.kunde_id)} – offen{' '}
+                  {Number(r.offener_betrag || 0).toFixed(2)} €
                 </option>
               ))}
           </select>
@@ -247,7 +253,8 @@ function MahnungenPageContent() {
             <br />
             Mahnstufe: {m.mahnstufe || 0}
             <br />
-            Erstellt: {m.erstellt_am ? new Date(m.erstellt_am).toLocaleString('de-DE') : '-'}
+            Erstellt:{' '}
+            {m.erstellt_am ? new Date(m.erstellt_am).toLocaleString('de-DE') : '-'}
             <br />
             Text: {m.text || '-'}
             <br />

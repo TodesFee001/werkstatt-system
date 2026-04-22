@@ -54,12 +54,21 @@ function ForderungenPageContent() {
       return
     }
 
-    setRechnungen(rRes.data || [])
-    setKunden(kRes.data || [])
+    setRechnungen((rRes.data || []) as Rechnung[])
+    setKunden((kRes.data || []) as Kunde[])
   }
 
   useEffect(() => {
     laden()
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const status = params.get('status') || 'alle'
+    const q = params.get('q') || ''
+    setStatusFilter(status)
+    setSuche(q)
   }, [])
 
   function kundeName(id: string | null) {
