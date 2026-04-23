@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import RoleGuard from '../components/RoleGuard'
 import StatusBadge from '../components/StatusBadge'
 import { supabase } from '@/lib/supabase'
@@ -12,6 +13,7 @@ type Rechnung = {
   offener_betrag: number | null
   status: string | null
   faellig_am: string | null
+  mahnstufe: number | null
 }
 
 type Kunde = {
@@ -32,6 +34,7 @@ export default function OffenePostenPage() {
 function OffenePostenPageContent() {
   const [rechnungen, setRechnungen] = useState<Rechnung[]>([])
   const [kunden, setKunden] = useState<Kunde[]>([])
+  const [suche, setSuche] = useState('')
   const [fehler, setFehler] = useState('')
 
   async function laden() {
@@ -61,13 +64,49 @@ function OffenePostenPageContent() {
   }
 
   const offen = useMemo(() => {
-    return rechnungen.filter((r) => Number(r.offener_betrag || 0) > 0)
-  }, [rechnungen])
+    const q = suche.trim().toLowerCase()
+
+    return rechnungen
+      .filter((r) => Number(r.offener_betrag || 0) > 0)
+      .filter((r) => {
+        if (!q) return true
+        return [
+          r.rechnungsnummer,
+          kundeName(r.kunde_id),
+          r.faellig_am,
+          r.status,
+        ]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      })
+      .sort((a, b) => Number(b.offener_betrag || 0) - Number(a.offener_betrag || 0))
+  }, [rechnungen, suche, kunden])
+
+  const gesamtOffen = offen.reduce((sum, r) => sum + Number(r.offener_betrag || 0), 0)
 
   return (
     <div className="page-card">
       <h1>Offene Posten</h1>
-      <p>Hier siehst du ausschließlich unbezahlte oder teilbezahlte Rechnungen.</p>
+      <p>Hier siehst du ausschließlich aktive unbezahlte oder teilbezahlte Rechnungen.</p>
+
+      <div className="kpi-strip" style={{ marginBottom: 18 }}>
+        <div className="kpi-pill">
+          Aktive offene Posten
+          <strong>{offen.length}</strong>
+        </div>
+        <div className="kpi-pill">
+          Gesamtsumme offen
+          <strong>{gesamtOffen.toFixed(2)} €</strong>
+        </div>
+      </div>
+
+      <div className="form-row" style={{ marginBottom: 16 }}>
+        <input
+          placeholder="Offene Posten durchsuchen"
+          value={suche}
+          onChange={(e) => setSuche(e.target.value)}
+        />
+      </div>
 
       {offen.map((r) => (
         <div key={r.id} className="list-box">
@@ -77,10 +116,40 @@ function OffenePostenPageContent() {
           <br />
           Fällig am: {r.faellig_am || '-'}
           <br />
+          Mahnstufe: {r.mahnstufe || 0}
+          <br />
           Offener Betrag: {Number(r.offener_betrag || 0).toFixed(2)} €
           <br />
           <div style={{ marginTop: 8 }}>
             <StatusBadge status={r.status || 'offen'} />
+          </div>
+          <div className="action-row" style={{ marginTop: 10 }}>
+            <Link
+              href="/zahlungen"
+              style={{
+                display: 'inline-block',
+                padding: '10px 16px',
+                background: '#2563eb',
+                color: 'white',
+                borderRadius: 12,
+                textDecoration: 'none',
+              }}
+            >
+              Zahlung erfassen
+            </Link>
+            <Link
+              href="/mahnungen"
+              style={{
+                display: 'inline-block',
+                padding: '10px 16px',
+                background: '#f59e0b',
+                color: 'white',
+                borderRadius: 12,
+                textDecoration: 'none',
+              }}
+            >
+              Mahnung prüfen
+            </Link>
           </div>
         </div>
       ))}

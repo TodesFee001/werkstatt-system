@@ -83,13 +83,9 @@ function MahnungenPageContent() {
   }
 
   const mahnbareRechnungen = useMemo(() => {
-    return rechnungen.filter((r) => {
-      const offen = Number(r.offener_betrag || 0) > 0
-      const statusOk = ['offen', 'teilbezahlt', 'ueberfaellig'].includes(
-        String(r.status || '').toLowerCase()
-      )
-      return offen || statusOk
-    })
+    return rechnungen
+      .filter((r) => Number(r.offener_betrag || 0) > 0)
+      .sort((a, b) => Number(b.offener_betrag || 0) - Number(a.offener_betrag || 0))
   }, [rechnungen])
 
   async function erstellen(e: React.FormEvent) {
@@ -164,7 +160,7 @@ function MahnungenPageContent() {
         <div>
           <h1 className="topbar-title">Mahnungen</h1>
           <div className="topbar-subtitle">
-            Rechnungen mit offenem Betrag sind auswählbar. Zahlung intern nachverfolgen ist jetzt als Schaltfläche nutzbar.
+            Mahnungen werden ausschließlich für aktive offene Rechnungen erstellt.
           </div>
         </div>
       </div>
@@ -235,7 +231,7 @@ function MahnungenPageContent() {
 
             <div className="action-row" style={{ marginTop: 10 }}>
               <Link
-                href="/forderungen"
+                href="/zahlungen"
                 style={{
                   display: 'inline-block',
                   padding: '10px 16px',
@@ -245,7 +241,20 @@ function MahnungenPageContent() {
                   textDecoration: 'none',
                 }}
               >
-                Zahlung intern nachverfolgen
+                Zahlung prüfen
+              </Link>
+              <Link
+                href="/forderungen"
+                style={{
+                  display: 'inline-block',
+                  padding: '10px 16px',
+                  background: '#f59e0b',
+                  color: 'white',
+                  borderRadius: 12,
+                  textDecoration: 'none',
+                }}
+              >
+                Forderung öffnen
               </Link>
             </div>
           </div>

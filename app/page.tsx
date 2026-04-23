@@ -1,287 +1,240 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  CartesianGrid,
-} from 'recharts'
-
-type Rechnung = {
-  id: string
-  status: string | null
-  brutto_summe: number | null
-  offener_betrag: number | null
-  rechnungsdatum: string | null
-}
 
 type Serviceauftrag = {
   id: string
+  art: string | null
   status: string | null
-}
-
-type Mitarbeiter = {
-  id: string
-  status: string | null
-}
-
-type Lagerartikel = {
-  id: string
-  name: string
-  bestand: number | null
-  mindestbestand: number | null
+  freigabe_status: string | null
 }
 
 type Termin = {
   id: string
-  startzeit: string
-  konflikt_gesamt: boolean | null
+  titel: string | null
+  startzeit: string | null
+  status: string | null
 }
 
-type Arbeitsplatz = {
+type Rechnung = {
   id: string
-  aktiv: boolean | null
+  rechnungsnummer: string | null
+  offener_betrag: number | null
+  status: string | null
+  faellig_am: string | null
+  mahnstufe: number | null
 }
 
-type Schicht = {
+type Lagerartikel = {
   id: string
-  datum: string
+  artikelnummer: number | null
+  name: string | null
+  bestand: number | null
+  mindestbestand: number | null
 }
 
-const PIE_COLORS = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2']
-
-export default function Dashboard() {
-  const [rechnungen, setRechnungen] = useState<Rechnung[]>([])
+export default function DashboardPage() {
   const [serviceauftraege, setServiceauftraege] = useState<Serviceauftrag[]>([])
-  const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([])
-  const [lagerartikel, setLagerartikel] = useState<Lagerartikel[]>([])
   const [termine, setTermine] = useState<Termin[]>([])
-  const [arbeitsplaetze, setArbeitsplaetze] = useState<Arbeitsplatz[]>([])
-  const [schichten, setSchichten] = useState<Schicht[]>([])
+  const [rechnungen, setRechnungen] = useState<Rechnung[]>([])
+  const [lagerartikel, setLagerartikel] = useState<Lagerartikel[]>([])
   const [fehler, setFehler] = useState('')
 
-  async function ladeDaten() {
-    const [rechnungenRes, serviceRes, mitarbeiterRes, lagerRes, termineRes, plaetzeRes, schichtenRes] =
-      await Promise.all([
-        supabase.from('rechnungen').select('*'),
-        supabase.from('serviceauftraege').select('*'),
-        supabase.from('mitarbeiter').select('*'),
-        supabase.from('lagerartikel').select('*'),
-        supabase.from('termine').select('*'),
-        supabase.from('arbeitsplaetze').select('*'),
-        supabase.from('mitarbeiter_schichten').select('*'),
-      ])
+  async function laden() {
+    const [serviceRes, terminRes, rechnungRes, lagerRes] = await Promise.all([
+      supabase.from('serviceauftraege').select('id, art, status, freigabe_status'),
+      supabase.from('termine').select('id, titel, startzeit, status'),
+      supabase.from('rechnungen').select('id, rechnungsnummer, offener_betrag, status, faellig_am, mahnstufe'),
+      supabase.from('lagerartikel').select('id, artikelnummer, name, bestand, mindestbestand'),
+    ])
 
-    const error =
-      rechnungenRes.error ||
-      serviceRes.error ||
-      mitarbeiterRes.error ||
-      lagerRes.error ||
-      termineRes.error ||
-      plaetzeRes.error ||
-      schichtenRes.error
-
-    if (error) {
-      setFehler(error.message)
+    if (serviceRes.error || terminRes.error || rechnungRes.error || lagerRes.error) {
+      setFehler(
+        serviceRes.error?.message ||
+          terminRes.error?.message ||
+          rechnungRes.error?.message ||
+          lagerRes.error?.message ||
+          ''
+      )
       return
     }
 
-    setRechnungen(rechnungenRes.data || [])
-    setServiceauftraege(serviceRes.data || [])
-    setMitarbeiter(mitarbeiterRes.data || [])
-    setLagerartikel(lagerRes.data || [])
-    setTermine(termineRes.data || [])
-    setArbeitsplaetze(plaetzeRes.data || [])
-    setSchichten(schichtenRes.data || [])
+    setServiceauftraege((serviceRes.data || []) as Serviceauftrag[])
+    setTermine((terminRes.data || []) as Termin[])
+    setRechnungen((rechnungRes.data || []) as Rechnung[])
+    setLagerartikel((lagerRes.data || []) as Lagerartikel[])
   }
 
   useEffect(() => {
-    ladeDaten()
+    laden()
   }, [])
 
-  const heute = new Date().toISOString().slice(0, 10)
+  const statistik = useMemo(() => {
+    const heute = new Date()
 
-  const offeneRechnungen = rechnungen.filter((r) => Number(r.offener_betrag || 0) > 0).length
-  const umsatz = rechnungen.reduce((sum, r) => sum + Number(r.brutto_summe || 0), 0)
-  const offeneServiceauftraege = serviceauftraege.filter(
-    (s) => !['abgeschlossen', 'abgerechnet', 'storniert'].includes(s.status || '')
-  ).length
-  const inArbeit = serviceauftraege.filter((s) => s.status === 'in_arbeit').length
-  const warnungenLager = lagerartikel.filter(
-    (a) => Number(a.bestand || 0) <= Number(a.mindestbestand || 0)
-  )
-  const aktiveMitarbeiter = mitarbeiter.filter((m) => m.status === 'aktiv').length
-  const konfliktTermine = termine.filter((t) => t.konflikt_gesamt).length
+    const offeneServiceauftraege = serviceauftraege.filter(
+      (s) => !['abgeschlossen', 'archiviert'].includes(String(s.status || '').toLowerCase())
+    ).length
 
-  const tagesTermine = termine.filter((t) => t.startzeit.slice(0, 10) === heute).length
-  const tagesSchichten = schichten.filter((s) => s.datum === heute).length
-  const aktivePlaetze = arbeitsplaetze.filter((a) => a.aktiv).length
+    const freigabenOffen = serviceauftraege.filter(
+      (s) => String(s.freigabe_status || '').toLowerCase() === 'offen'
+    ).length
 
-  const umsatzMonate = useMemo(() => {
-    const monate = Array.from({ length: 12 }, (_, i) => ({
-      monat: `${i + 1}`,
-      umsatz: 0,
-    }))
+    const aktiveTermine = termine.filter((t) => {
+      if (!t.startzeit) return false
+      const start = new Date(t.startzeit)
+      return start.getTime() >= heute.getTime()
+    }).length
 
-    for (const r of rechnungen) {
-      if (!r.rechnungsdatum) continue
-      const d = new Date(r.rechnungsdatum)
-      monate[d.getMonth()].umsatz += Number(r.brutto_summe || 0)
+    const offeneRechnungen = rechnungen.filter((r) => Number(r.offener_betrag || 0) > 0).length
+
+    const offeneSumme = rechnungen.reduce(
+      (sum, r) => sum + Number(r.offener_betrag || 0),
+      0
+    )
+
+    const kritischeLagerartikel = lagerartikel.filter(
+      (l) => Number(l.bestand || 0) < Number(l.mindestbestand || 0)
+    ).length
+
+    return {
+      offeneServiceauftraege,
+      freigabenOffen,
+      aktiveTermine,
+      offeneRechnungen,
+      offeneSumme,
+      kritischeLagerartikel,
     }
+  }, [serviceauftraege, termine, rechnungen, lagerartikel])
 
-    return monate
+  const naechsteTermine = useMemo(() => {
+    return [...termine]
+      .filter((t) => t.startzeit)
+      .sort(
+        (a, b) =>
+          new Date(a.startzeit || '').getTime() - new Date(b.startzeit || '').getTime()
+      )
+      .slice(0, 5)
+  }, [termine])
+
+  const offeneRechnungenListe = useMemo(() => {
+    return rechnungen
+      .filter((r) => Number(r.offener_betrag || 0) > 0)
+      .sort((a, b) => Number(b.offener_betrag || 0) - Number(a.offener_betrag || 0))
+      .slice(0, 5)
   }, [rechnungen])
 
-  const statusPieData = useMemo(() => {
-    const map: Record<string, number> = {}
-    for (const s of serviceauftraege) {
-      const key = s.status || 'unbekannt'
-      map[key] = (map[key] || 0) + 1
-    }
-    return Object.entries(map).map(([name, value]) => ({ name, value }))
-  }, [serviceauftraege])
+  const lagerWarnungen = useMemo(() => {
+    return lagerartikel
+      .filter((l) => Number(l.bestand || 0) < Number(l.mindestbestand || 0))
+      .sort((a, b) => Number(a.artikelnummer || 0) - Number(b.artikelnummer || 0))
+      .slice(0, 5)
+  }, [lagerartikel])
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
-      <div className="hero-card">
-        <h1>Werkstatt-Dashboard</h1>
-        <p>
-          Überblick über Umsatz, Tagesauslastung, Serviceaufträge, Lager und Kapazität.
-        </p>
-      </div>
-
-      <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-label">Gesamtumsatz</div>
-          <div className="stat-value">{umsatz.toFixed(2)} €</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Offene Rechnungen</div>
-          <div className="stat-value">{offeneRechnungen}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Offene Serviceaufträge</div>
-          <div className="stat-value">{offeneServiceauftraege}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Fahrzeuge in Arbeit</div>
-          <div className="stat-value">{inArbeit}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Aktive Mitarbeiter</div>
-          <div className="stat-value">{aktiveMitarbeiter}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Konflikt-Termine</div>
-          <div className="stat-value">{konfliktTermine}</div>
-        </div>
-      </div>
-
-      <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-label">Termine heute</div>
-          <div className="stat-value">{tagesTermine}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Schichten heute</div>
-          <div className="stat-value">{tagesSchichten}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Aktive Arbeitsplätze</div>
-          <div className="stat-value">{aktivePlaetze}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Lagerwarnungen</div>
-          <div className="stat-value">{warnungenLager.length}</div>
-        </div>
-      </div>
-
-      <div className="two-col">
-        <div className="chart-card">
-          <h2 style={{ marginTop: 0 }}>Umsatz pro Monat</h2>
-          <div style={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
-              <BarChart data={umsatzMonate}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="monat" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="umsatz" fill="#2563eb" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="chart-card">
-          <h2 style={{ marginTop: 0 }}>Serviceauftrag-Status</h2>
-          <div style={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={statusPieData} dataKey="value" nameKey="name" outerRadius={110} label>
-                  {statusPieData.map((_, index) => (
-                    <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+      <div className="topbar">
+        <div>
+          <h1 className="topbar-title">Dashboard</h1>
+          <div className="topbar-subtitle">
+            Werkstattübersicht für Aufträge, Termine, Rechnungen und Lager.
           </div>
         </div>
       </div>
 
-      <div className="two-col">
-        <div className="chart-card">
-          <h2 style={{ marginTop: 0 }}>Schnellaktionen</h2>
-          <div className="action-row">
-            <Link href="/kunden" className="sidebar-link" style={{ background: '#eff6ff', color: '#1d4ed8' }}>
-              Neuer Kunde
-            </Link>
-            <Link href="/fahrzeuge" className="sidebar-link" style={{ background: '#eff6ff', color: '#1d4ed8' }}>
-              Neues Fahrzeug
-            </Link>
-            <Link href="/serviceauftraege" className="sidebar-link" style={{ background: '#eff6ff', color: '#1d4ed8' }}>
-              Neuer Auftrag
-            </Link>
-            <Link href="/termine" className="sidebar-link" style={{ background: '#eff6ff', color: '#1d4ed8' }}>
-              Werkstattplanung
-            </Link>
-            <Link href="/arbeitsplaetze" className="sidebar-link" style={{ background: '#eff6ff', color: '#1d4ed8' }}>
-              Arbeitsplätze
-            </Link>
-            <Link href="/schichten" className="sidebar-link" style={{ background: '#eff6ff', color: '#1d4ed8' }}>
-              Schichten
-            </Link>
-          </div>
+      <div className="kpi-strip">
+        <div className="kpi-pill">
+          Offene Serviceaufträge
+          <strong>{statistik.offeneServiceauftraege}</strong>
         </div>
-
-        <div className="chart-card">
-          <h2 style={{ marginTop: 0 }}>Lagerwarnungen</h2>
-          {warnungenLager.length === 0 ? (
-            <div className="muted">Keine Lagerwarnungen vorhanden.</div>
-          ) : (
-            warnungenLager.slice(0, 8).map((a) => (
-              <div key={a.id} className="list-box" style={{ marginBottom: 10 }}>
-                <strong>{a.name}</strong>
-                <br />
-                Bestand: {Number(a.bestand || 0).toFixed(2)}
-                <br />
-                Mindestbestand: {Number(a.mindestbestand || 0).toFixed(2)}
-              </div>
-            ))
-          )}
+        <div className="kpi-pill">
+          Offene Freigaben
+          <strong>{statistik.freigabenOffen}</strong>
+        </div>
+        <div className="kpi-pill">
+          Aktive Termine
+          <strong>{statistik.aktiveTermine}</strong>
+        </div>
+        <div className="kpi-pill">
+          Offene Rechnungen
+          <strong>{statistik.offeneRechnungen}</strong>
+        </div>
+        <div className="kpi-pill">
+          Offene Summe
+          <strong>{statistik.offeneSumme.toFixed(2)} €</strong>
+        </div>
+        <div className="kpi-pill">
+          Kritische Lagerartikel
+          <strong>{statistik.kritischeLagerartikel}</strong>
         </div>
       </div>
 
-      {fehler && <div className="error-box">Fehler: {fehler}</div>}
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Schnellzugriff</h2>
+        <div className="action-row">
+          <Link className="sidebar-link" href="/serviceauftraege">Serviceaufträge</Link>
+          <Link className="sidebar-link" href="/termine">Termine</Link>
+          <Link className="sidebar-link" href="/lager">Lager</Link>
+          <Link className="sidebar-link" href="/rechnungen">Rechnungen</Link>
+          <Link className="sidebar-link" href="/zahlungen">Zahlungen</Link>
+          <Link className="sidebar-link" href="/benachrichtigungen">Benachrichtigungen</Link>
+        </div>
+      </div>
+
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Nächste Termine</h2>
+        {naechsteTermine.map((t) => (
+          <div key={t.id} className="list-box">
+            <strong>{t.titel || '-'}</strong>
+            <br />
+            Start: {t.startzeit ? new Date(t.startzeit).toLocaleString('de-DE') : '-'}
+            <br />
+            Status: {t.status || '-'}
+          </div>
+        ))}
+        {naechsteTermine.length === 0 && <div className="muted">Keine kommenden Termine vorhanden.</div>}
+      </div>
+
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Größte offenen Rechnungen</h2>
+        {offeneRechnungenListe.map((r) => (
+          <div key={r.id} className="list-box">
+            <strong>{r.rechnungsnummer || r.id}</strong>
+            <br />
+            Offen: {Number(r.offener_betrag || 0).toFixed(2)} €
+            <br />
+            Fällig am: {r.faellig_am || '-'}
+            <br />
+            Mahnstufe: {r.mahnstufe || 0}
+          </div>
+        ))}
+        {offeneRechnungenListe.length === 0 && <div className="muted">Keine offenen Rechnungen vorhanden.</div>}
+      </div>
+
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Kritische Lagerartikel</h2>
+        {lagerWarnungen.map((l) => (
+          <div
+            key={l.id}
+            className="list-box"
+            style={{
+              background: 'rgba(220,38,38,0.18)',
+              border: '2px solid #dc2626',
+            }}
+          >
+            <strong>{l.artikelnummer || '-'} – {l.name || '-'}</strong>
+            <br />
+            Bestand: {Number(l.bestand || 0).toFixed(2)}
+            <br />
+            Mindestbestand: {Number(l.mindestbestand || 0).toFixed(2)}
+          </div>
+        ))}
+        {lagerWarnungen.length === 0 && <div className="muted">Keine kritischen Lagerartikel vorhanden.</div>}
+      </div>
+
+      {fehler && <div className="error-box">{fehler}</div>}
     </div>
   )
 }

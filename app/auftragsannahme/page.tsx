@@ -108,7 +108,7 @@ function AuftragsannahmePageContent() {
     setNotiz('')
     setKundenunterschrift('')
     setMitarbeiterunterschrift('')
-    setMeldung('Fahrzeugannahme gespeichert.')
+    setMeldung('Fahrzeugannahme / Fahrzeugcheck gespeichert.')
     laden()
   }
 
@@ -119,7 +119,7 @@ function AuftragsannahmePageContent() {
 
   return (
     <div className="page-card">
-      <h1>Auftragsannahme / Fahrzeugcheck</h1>
+      <h1>Auftragsannahme / Fahrzeugannahme / Fahrzeugcheck</h1>
 
       <form onSubmit={speichern} className="list-box" style={{ marginBottom: 20 }}>
         <div className="form-row">
@@ -243,6 +243,7 @@ function AuftragsannahmePageContent() {
         </div>
       ))}
 
+      {checks.length === 0 && <div className="muted">Noch keine Fahrzeugannahmen vorhanden.</div>}
       {meldung && <div className="badge badge-success">{meldung}</div>}
       {fehler && <div className="error-box">{fehler}</div>}
     </div>
