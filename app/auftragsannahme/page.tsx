@@ -62,8 +62,8 @@ function AuftragsannahmePageContent() {
       return
     }
 
-    setServiceauftraege(serviceRes.data || [])
-    setChecks(checkRes.data || [])
+    setServiceauftraege((serviceRes.data || []) as Serviceauftrag[])
+    setChecks((checkRes.data || []) as Fahrzeugcheck[])
   }
 
   useEffect(() => {
@@ -108,7 +108,7 @@ function AuftragsannahmePageContent() {
     setNotiz('')
     setKundenunterschrift('')
     setMitarbeiterunterschrift('')
-    setMeldung('Fahrzeugcheck gespeichert.')
+    setMeldung('Fahrzeugannahme gespeichert.')
     laden()
   }
 
@@ -137,14 +137,19 @@ function AuftragsannahmePageContent() {
             value={kilometerstand}
             onChange={(e) => setKilometerstand(e.target.value)}
           />
+        </div>
 
-          <select value={tankstand} onChange={(e) => setTankstand(e.target.value)}>
-            <option value="leer">leer</option>
-            <option value="1/4">1/4</option>
-            <option value="1/2">1/2</option>
-            <option value="3/4">3/4</option>
-            <option value="voll">voll</option>
-          </select>
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <label style={{ display: 'grid', gap: 6, minWidth: 260 }}>
+            <span>Tankfüllung bei Annahme</span>
+            <select value={tankstand} onChange={(e) => setTankstand(e.target.value)}>
+              <option value="leer">leer</option>
+              <option value="1/4">1/4</option>
+              <option value="1/2">1/2</option>
+              <option value="3/4">3/4</option>
+              <option value="voll">voll</option>
+            </select>
+          </label>
         </div>
 
         <div style={{ marginTop: 12 }}>
@@ -158,16 +163,16 @@ function AuftragsannahmePageContent() {
 
         <div style={{ marginTop: 12 }}>
           <textarea
-  placeholder="Innencheck"
-  value={innencheck}
-  onChange={(e) => setInnencheck(e.target.value)}
-  style={{ width: '100%', minHeight: 80 }}
-/>
+            placeholder="Innencheck"
+            value={innencheck}
+            onChange={(e) => setInnencheck(e.target.value)}
+            style={{ width: '100%', minHeight: 80 }}
+          />
         </div>
 
         <div style={{ marginTop: 12 }}>
           <textarea
-            placeholder="Bekannte Schäden"
+            placeholder="Schäden"
             value={schaeden}
             onChange={(e) => setSchaeden(e.target.value)}
             style={{ width: '100%', minHeight: 80 }}
@@ -194,23 +199,23 @@ function AuftragsannahmePageContent() {
 
         <div className="form-row" style={{ marginTop: 12 }}>
           <input
-            placeholder="Kundenunterschrift (Name als Light-Version)"
+            placeholder="Kundenunterschrift"
             value={kundenunterschrift}
             onChange={(e) => setKundenunterschrift(e.target.value)}
           />
           <input
-            placeholder="Mitarbeiterunterschrift (Name als Light-Version)"
+            placeholder="Mitarbeiterunterschrift"
             value={mitarbeiterunterschrift}
             onChange={(e) => setMitarbeiterunterschrift(e.target.value)}
           />
         </div>
 
         <div className="action-row">
-          <button type="submit">Fahrzeugcheck speichern</button>
+          <button type="submit">Annahme speichern</button>
         </div>
       </form>
 
-      <h2>Gespeicherte Fahrzeugchecks</h2>
+      <h2>Bereits erfasste Fahrzeugannahmen</h2>
 
       {checks.map((c) => (
         <div key={c.id} className="list-box">
@@ -218,7 +223,7 @@ function AuftragsannahmePageContent() {
           <br />
           Kilometerstand: {c.kilometerstand ?? '-'}
           <br />
-          Tankstand: {c.tankstand || '-'}
+          Tankfüllung: {c.tankstand || '-'}
           <br />
           Außencheck: {c.aussencheck || '-'}
           <br />

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import RoleGuard from '../components/RoleGuard'
 import StatusBadge from '../components/StatusBadge'
 import { supabase } from '@/lib/supabase'
@@ -11,7 +12,7 @@ type Rechnung = {
   kunde_id: string | null
   offener_betrag: number | null
   mahnstufe: number | null
-  forderungsstatus: string | null
+  status: string | null
 }
 
 type Kunde = {
@@ -41,8 +42,6 @@ export default function MahnungenPage() {
 }
 
 function MahnungenPageContent() {
-  const [rechnungFilter, setRechnungFilter] = useState('')
-
   const [rechnungen, setRechnungen] = useState<Rechnung[]>([])
   const [kunden, setKunden] = useState<Kunde[]>([])
   const [mahnungen, setMahnungen] = useState<Mahnung[]>([])
@@ -54,14 +53,6 @@ function MahnungenPageContent() {
 
   const [fehler, setFehler] = useState('')
   const [meldung, setMeldung] = useState('')
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    const rechnung = params.get('rechnung') || ''
-    setRechnungFilter(rechnung)
-    setRechnungId(rechnung)
-  }, [])
 
   async function laden() {
     const [rRes, kRes, mRes] = await Promise.all([
@@ -85,18 +76,23 @@ function MahnungenPageContent() {
   }, [])
 
   function kundeName(kundeId: string | null) {
-    if (!kundeId) return 'Unbekannter Kunde'
     const kunde = kunden.find((k) => k.id === kundeId)
-    if (!kunde) return 'Unbekannter Kunde'
-    return kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
+    return kunde
+      ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
+      : '-'
   }
 
-  function rechnungName(id: string) {
-    const r = rechnungen.find((x) => x.id === id)
-    return r ? `${r.rechnungsnummer || r.id} – ${kundeName(r.kunde_id)}` : id
-  }
+  const mahnbareRechnungen = useMemo(() => {
+    return rechnungen.filter((r) => {
+      const offen = Number(r.offener_betrag || 0) > 0
+      const statusOk = ['offen', 'teilbezahlt', 'ueberfaellig'].includes(
+        String(r.status || '').toLowerCase()
+      )
+      return offen || statusOk
+    })
+  }, [rechnungen])
 
-  async function mahnungErstellen(e: React.FormEvent) {
+  async function erstellen(e: React.FormEvent) {
     e.preventDefault()
     setFehler('')
     setMeldung('')
@@ -107,7 +103,6 @@ function MahnungenPageContent() {
     }
 
     const rechnung = rechnungen.find((r) => r.id === rechnungId)
-
     if (!rechnung) {
       setFehler('Rechnung nicht gefunden.')
       return
@@ -115,21 +110,17 @@ function MahnungenPageContent() {
 
     const neueStufe = Number(rechnung.mahnstufe || 0) + 1
 
-    const defaultBetreff =
-      betreff.trim() ||
-      `Mahnung Stufe ${neueStufe} zu Rechnung ${rechnung.rechnungsnummer || rechnung.id}`
-
-    const defaultText =
-      text.trim() ||
-      `Offener Betrag: ${Number(rechnung.offener_betrag || 0).toFixed(
-        2
-      )} €. Bitte Zahlung intern nachverfolgen.`
-
     const { error: mahnungError } = await supabase.from('mahnungen').insert({
       rechnung_id: rechnungId,
       mahnstufe: neueStufe,
-      betreff: defaultBetreff,
-      text: defaultText,
+      betreff:
+        betreff.trim() ||
+        `Mahnung Stufe ${neueStufe} zu Rechnung ${rechnung.rechnungsnummer || rechnung.id}`,
+      text:
+        text.trim() ||
+        `Interne Mahnung zu offener Rechnung über ${Number(
+          rechnung.offener_betrag || 0
+        ).toFixed(2)} €.`,
       status: 'erstellt',
       notiz: notiz || null,
     })
@@ -139,26 +130,27 @@ function MahnungenPageContent() {
       return
     }
 
-    let neuerForderungsstatus = 'zahlungserinnerung'
-    if (neueStufe === 1) neuerForderungsstatus = 'mahnung_1'
-    if (neueStufe === 2) neuerForderungsstatus = 'mahnung_2'
-    if (neueStufe >= 3) neuerForderungsstatus = 'mahnung_3'
+    let forderungsstatus = 'zahlungserinnerung'
+    if (neueStufe === 1) forderungsstatus = 'mahnung_1'
+    if (neueStufe === 2) forderungsstatus = 'mahnung_2'
+    if (neueStufe >= 3) forderungsstatus = 'mahnung_3'
 
-    const { error: rechnungError } = await supabase
+    const { error: updateError } = await supabase
       .from('rechnungen')
       .update({
         mahnstufe: neueStufe,
         letzte_mahnung_am: new Date().toISOString(),
         status: 'ueberfaellig',
-        forderungsstatus: neuerForderungsstatus,
+        forderungsstatus,
       })
       .eq('id', rechnungId)
 
-    if (rechnungError) {
-      setFehler(rechnungError.message)
+    if (updateError) {
+      setFehler(updateError.message)
       return
     }
 
+    setRechnungId('')
     setBetreff('')
     setText('')
     setNotiz('')
@@ -166,54 +158,34 @@ function MahnungenPageContent() {
     laden()
   }
 
-  async function statusAendern(mahnungId: string, status: string) {
-    const { error } = await supabase
-      .from('mahnungen')
-      .update({ status })
-      .eq('id', mahnungId)
-
-    if (error) {
-      setFehler(error.message)
-      return
-    }
-
-    laden()
-  }
-
-  const sichtbareMahnungen = useMemo(() => {
-    if (!rechnungFilter) return mahnungen
-    return mahnungen.filter((m) => m.rechnung_id === rechnungFilter)
-  }, [mahnungen, rechnungFilter])
-
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       <div className="topbar">
         <div>
           <h1 className="topbar-title">Mahnungen</h1>
           <div className="topbar-subtitle">
-            Interne Mahnungsverwaltung ohne Mailversand.
+            Rechnungen mit offenem Betrag sind auswählbar. Zahlung intern nachverfolgen ist jetzt als Schaltfläche nutzbar.
           </div>
         </div>
       </div>
 
-      <form onSubmit={mahnungErstellen} className="page-card">
-        <h2 style={{ marginTop: 0 }}>Mahnung erstellen</h2>
+      <form onSubmit={erstellen} className="page-card">
+        <h2 style={{ marginTop: 0 }}>Mahnung anlegen</h2>
 
         <div className="form-row">
           <select value={rechnungId} onChange={(e) => setRechnungId(e.target.value)}>
             <option value="">Rechnung auswählen</option>
-            {rechnungen
-              .filter((r) => Number(r.offener_betrag || 0) > 0)
-              .map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.rechnungsnummer || r.id} – {kundeName(r.kunde_id)} – offen{' '}
-                  {Number(r.offener_betrag || 0).toFixed(2)} €
-                </option>
-              ))}
+            {mahnbareRechnungen.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.rechnungsnummer || r.id} – {kundeName(r.kunde_id)} – offen {Number(r.offener_betrag || 0).toFixed(2)} €
+              </option>
+            ))}
           </select>
+        </div>
 
+        <div style={{ marginTop: 12 }}>
           <input
-            placeholder="Betreff (optional)"
+            placeholder="Betreff"
             value={betreff}
             onChange={(e) => setBetreff(e.target.value)}
           />
@@ -233,7 +205,7 @@ function MahnungenPageContent() {
             placeholder="Interne Notiz"
             value={notiz}
             onChange={(e) => setNotiz(e.target.value)}
-            style={{ width: '100%', minHeight: 90 }}
+            style={{ width: '100%', minHeight: 80 }}
           />
         </div>
 
@@ -245,16 +217,13 @@ function MahnungenPageContent() {
       <div className="page-card">
         <h2 style={{ marginTop: 0 }}>Mahnungsverlauf</h2>
 
-        {sichtbareMahnungen.map((m) => (
+        {mahnungen.map((m) => (
           <div key={m.id} className="list-box">
             <strong>{m.betreff || '-'}</strong>
             <br />
-            Rechnung: {rechnungName(m.rechnung_id)}
-            <br />
             Mahnstufe: {m.mahnstufe || 0}
             <br />
-            Erstellt:{' '}
-            {m.erstellt_am ? new Date(m.erstellt_am).toLocaleString('de-DE') : '-'}
+            Erstellt: {m.erstellt_am ? new Date(m.erstellt_am).toLocaleString('de-DE') : '-'}
             <br />
             Text: {m.text || '-'}
             <br />
@@ -264,20 +233,25 @@ function MahnungenPageContent() {
               <StatusBadge status={m.status || 'erstellt'} />
             </div>
 
-            <div className="action-row">
-              <button type="button" onClick={() => statusAendern(m.id, 'bearbeitet')}>
-                Als bearbeitet markieren
-              </button>
-              <button type="button" onClick={() => statusAendern(m.id, 'abgeschlossen')}>
-                Abschließen
-              </button>
+            <div className="action-row" style={{ marginTop: 10 }}>
+              <Link
+                href="/forderungen"
+                style={{
+                  display: 'inline-block',
+                  padding: '10px 16px',
+                  background: '#2563eb',
+                  color: 'white',
+                  borderRadius: 12,
+                  textDecoration: 'none',
+                }}
+              >
+                Zahlung intern nachverfolgen
+              </Link>
             </div>
           </div>
         ))}
 
-        {sichtbareMahnungen.length === 0 && (
-          <div className="muted">Keine Mahnungen vorhanden.</div>
-        )}
+        {mahnungen.length === 0 && <div className="muted">Noch keine Mahnungen vorhanden.</div>}
       </div>
 
       {meldung && <div className="badge badge-success">{meldung}</div>}

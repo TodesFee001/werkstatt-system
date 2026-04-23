@@ -1,137 +1,114 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import RoleGuard from '../components/RoleGuard'
+import { supabase } from '@/lib/supabase'
 
 type Firmenprofil = {
   id: string
-  name: string
+  firmenname: string | null
   strasse: string | null
   plz: string | null
   ort: string | null
-  land: string | null
   telefon: string | null
   email: string | null
-  website: string | null
   ust_id: string | null
-  steuernummer: string | null
   iban: string | null
   bic: string | null
-  bankname: string | null
+  bank: string | null
+}
+
+export default function FirmenprofilPage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Serviceannahme']}>
+      <FirmenprofilPageContent />
+    </RoleGuard>
+  )
 }
 
 function FirmenprofilPageContent() {
-  const [profil, setProfil] = useState<Firmenprofil | null>(null)
-
-  const [name, setName] = useState('')
+  const [profilId, setProfilId] = useState('')
+  const [firmenname, setFirmenname] = useState('')
   const [strasse, setStrasse] = useState('')
   const [plz, setPlz] = useState('')
   const [ort, setOrt] = useState('')
-  const [land, setLand] = useState('Deutschland')
   const [telefon, setTelefon] = useState('')
   const [email, setEmail] = useState('')
-  const [website, setWebsite] = useState('')
   const [ustId, setUstId] = useState('')
-  const [steuernummer, setSteuernummer] = useState('')
   const [iban, setIban] = useState('')
   const [bic, setBic] = useState('')
-  const [bankname, setBankname] = useState('')
-
+  const [bank, setBank] = useState('')
   const [fehler, setFehler] = useState('')
+  const [meldung, setMeldung] = useState('')
 
-  async function ladeProfil() {
-    const { data, error } = await supabase
-      .from('firmenprofil')
-      .select('*')
-      .limit(1)
-      .maybeSingle()
+  async function laden() {
+    const { data, error } = await supabase.from('firmenprofil').select('*').limit(1).maybeSingle()
 
     if (error) {
       setFehler(error.message)
       return
     }
 
-    setProfil(data || null)
+    if (!data) return
 
-    if (data) {
-      setName(data.name || '')
-      setStrasse(data.strasse || '')
-      setPlz(data.plz || '')
-      setOrt(data.ort || '')
-      setLand(data.land || 'Deutschland')
-      setTelefon(data.telefon || '')
-      setEmail(data.email || '')
-      setWebsite(data.website || '')
-      setUstId(data.ust_id || '')
-      setSteuernummer(data.steuernummer || '')
-      setIban(data.iban || '')
-      setBic(data.bic || '')
-      setBankname(data.bankname || '')
-    }
+    const profil = data as Firmenprofil
+    setProfilId(profil.id)
+    setFirmenname(profil.firmenname || '')
+    setStrasse(profil.strasse || '')
+    setPlz(profil.plz || '')
+    setOrt(profil.ort || '')
+    setTelefon(profil.telefon || '')
+    setEmail(profil.email || '')
+    setUstId(profil.ust_id || '')
+    setIban(profil.iban || '')
+    setBic(profil.bic || '')
+    setBank(profil.bank || '')
   }
 
   useEffect(() => {
-    ladeProfil()
+    laden()
   }, [])
 
   async function speichern(e: React.FormEvent) {
     e.preventDefault()
     setFehler('')
+    setMeldung('')
 
-    if (!name.trim()) {
-      setFehler('Bitte Firmennamen eingeben.')
-      return
+    const payload = {
+      firmenname: firmenname || null,
+      strasse: strasse || null,
+      plz: plz || null,
+      ort: ort || null,
+      telefon: telefon || null,
+      email: email || null,
+      ust_id: ustId || null,
+      iban: iban || null,
+      bic: bic || null,
+      bank: bank || null,
     }
 
-    if (profil) {
-      const { error } = await supabase
-        .from('firmenprofil')
-        .update({
-          name: name.trim(),
-          strasse: strasse || null,
-          plz: plz || null,
-          ort: ort || null,
-          land: land || null,
-          telefon: telefon || null,
-          email: email || null,
-          website: website || null,
-          ust_id: ustId || null,
-          steuernummer: steuernummer || null,
-          iban: iban || null,
-          bic: bic || null,
-          bankname: bankname || null,
-        })
-        .eq('id', profil.id)
-
+    if (profilId) {
+      const { error } = await supabase.from('firmenprofil').update(payload).eq('id', profilId)
       if (error) {
         setFehler(error.message)
         return
       }
     } else {
-      const { error } = await supabase.from('firmenprofil').insert({
-        name: name.trim(),
-        strasse: strasse || null,
-        plz: plz || null,
-        ort: ort || null,
-        land: land || null,
-        telefon: telefon || null,
-        email: email || null,
-        website: website || null,
-        ust_id: ustId || null,
-        steuernummer: steuernummer || null,
-        iban: iban || null,
-        bic: bic || null,
-        bankname: bankname || null,
-      })
+      const { data, error } = await supabase
+        .from('firmenprofil')
+        .insert(payload)
+        .select()
+        .single()
 
       if (error) {
         setFehler(error.message)
         return
       }
+
+      setProfilId(data.id)
     }
 
-    ladeProfil()
+    setMeldung('Firmenprofil gespeichert.')
   }
 
   return (
@@ -140,35 +117,37 @@ function FirmenprofilPageContent() {
 
       <form onSubmit={speichern}>
         <div className="form-row">
-          <input placeholder="Firmenname" value={name} onChange={(e) => setName(e.target.value)} />
+          <input placeholder="Firmenname" value={firmenname} onChange={(e) => setFirmenname(e.target.value)} />
           <input placeholder="Straße" value={strasse} onChange={(e) => setStrasse(e.target.value)} />
-          <input placeholder="PLZ" value={plz} onChange={(e) => setPlz(e.target.value)} />
-          <input placeholder="Ort" value={ort} onChange={(e) => setOrt(e.target.value)} />
-          <input placeholder="Land" value={land} onChange={(e) => setLand(e.target.value)} />
-          <input placeholder="Telefon" value={telefon} onChange={(e) => setTelefon(e.target.value)} />
-          <input placeholder="E-Mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input placeholder="Website" value={website} onChange={(e) => setWebsite(e.target.value)} />
-          <input placeholder="USt-ID" value={ustId} onChange={(e) => setUstId(e.target.value)} />
-          <input placeholder="Steuernummer" value={steuernummer} onChange={(e) => setSteuernummer(e.target.value)} />
-          <input placeholder="IBAN" value={iban} onChange={(e) => setIban(e.target.value)} />
-          <input placeholder="BIC" value={bic} onChange={(e) => setBic(e.target.value)} />
-          <input placeholder="Bankname" value={bankname} onChange={(e) => setBankname(e.target.value)} />
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <input placeholder="PLZ" value={plz} onChange={(e) => setPlz(e.target.value)} />
+          <input placeholder="Ort" value={ort} onChange={(e) => setOrt(e.target.value)} />
+        </div>
+
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <input placeholder="Telefon" value={telefon} onChange={(e) => setTelefon(e.target.value)} />
+          <input placeholder="E-Mail" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <input placeholder="USt-ID" value={ustId} onChange={(e) => setUstId(e.target.value)} />
+          <input placeholder="IBAN" value={iban} onChange={(e) => setIban(e.target.value)} />
+        </div>
+
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <input placeholder="BIC" value={bic} onChange={(e) => setBic(e.target.value)} />
+          <input placeholder="Bank" value={bank} onChange={(e) => setBank(e.target.value)} />
+        </div>
+
+        <div className="action-row" style={{ marginTop: 16 }}>
           <button type="submit">Firmenprofil speichern</button>
         </div>
       </form>
 
-      {fehler && <div className="error-box">Fehler: {fehler}</div>}
+      {meldung && <div className="badge badge-success">{meldung}</div>}
+      {fehler && <div className="error-box">{fehler}</div>}
     </div>
-  )
-}
-
-export default function FirmenprofilPage() {
-  return (
-    <RoleGuard allowedRoles={['Admin']}>
-      <FirmenprofilPageContent />
-    </RoleGuard>
   )
 }

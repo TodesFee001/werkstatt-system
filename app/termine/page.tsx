@@ -1,24 +1,20 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import RoleGuard from '../components/RoleGuard'
 import StatusBadge from '../components/StatusBadge'
+import { supabase } from '@/lib/supabase'
 
 type Termin = {
   id: string
   titel: string | null
   beschreibung: string | null
-  startzeit: string
+  startzeit: string | null
   endzeit: string | null
+  status: string | null
   serviceauftrag_id: string | null
   mitarbeiter_id: string | null
-  arbeitsplatz: string | null
   arbeitsplatz_id: string | null
-  status: string | null
-  konflikt_mitarbeiter: boolean | null
-  konflikt_arbeitsplatz: boolean | null
-  konflikt_gesamt: boolean | null
 }
 
 type Serviceauftrag = {
@@ -34,300 +30,131 @@ type Mitarbeiter = {
 
 type Arbeitsplatz = {
   id: string
-  name: string
+  name: string | null
   typ: string | null
   aktiv: boolean | null
 }
 
-type Schicht = {
-  id: string
-  mitarbeiter_id: string
-  datum: string
-  startzeit: string
-  endzeit: string
-  notiz: string | null
-}
-
-function startOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1)
-}
-
-function startOfCalendar(date: Date) {
-  const first = startOfMonth(date)
-  const day = first.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const result = new Date(first)
-  result.setDate(first.getDate() + diff)
-  return result
-}
-
-function sameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  )
-}
-
-function addDays(date: Date, days: number) {
-  const d = new Date(date)
-  d.setDate(d.getDate() + days)
-  return d
-}
-
-function formatMonthTitle(date: Date) {
-  return date.toLocaleDateString('de-DE', {
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
-function dayLabel(date: Date) {
-  return date.toLocaleDateString('de-DE', {
-    weekday: 'short',
-    day: '2-digit',
-    month: '2-digit',
-  })
-}
-
-function datetimeLocalValue(value: string | null) {
-  if (!value) return ''
-  const d = new Date(value)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function formatDatum(d: string) {
-  return new Date(d).toLocaleString('de-DE')
-}
-
-function zeitenUeberschneiden(
-  startA: string,
-  endeA: string | null,
-  startB: string,
-  endeB: string | null
-) {
-  const aStart = new Date(startA).getTime()
-  const aEnd = new Date(endeA || startA).getTime()
-  const bStart = new Date(startB).getTime()
-  const bEnd = new Date(endeB || startB).getTime()
-  return aStart < bEnd && bStart < aEnd
-}
-
-function konfliktHintergrund(t: Termin) {
-  if (t.konflikt_gesamt) return '#fee2e2'
-  if (t.status === 'abgeschlossen') return '#dcfce7'
-  if (t.status === 'in_arbeit') return '#dbeafe'
-  if (t.status === 'bestaetigt') return '#ede9fe'
-  if (t.status === 'verschoben') return '#fef3c7'
-  return '#eff6ff'
-}
-
 export default function TerminePage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Serviceannahme', 'Werkstatt']}>
-      <TermineContent />
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung']}>
+      <TerminePageContent />
     </RoleGuard>
   )
 }
 
-function TermineContent() {
+function TerminePageContent() {
   const [termine, setTermine] = useState<Termin[]>([])
   const [serviceauftraege, setServiceauftraege] = useState<Serviceauftrag[]>([])
   const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([])
   const [arbeitsplaetze, setArbeitsplaetze] = useState<Arbeitsplatz[]>([])
-  const [schichten, setSchichten] = useState<Schicht[]>([])
 
   const [titel, setTitel] = useState('')
   const [beschreibung, setBeschreibung] = useState('')
-  const [start, setStart] = useState('')
-  const [ende, setEnde] = useState('')
-  const [auftragId, setAuftragId] = useState('')
+  const [startzeit, setStartzeit] = useState('')
+  const [endzeit, setEndzeit] = useState('')
+  const [status, setStatus] = useState('geplant')
+  const [serviceauftragId, setServiceauftragId] = useState('')
   const [mitarbeiterId, setMitarbeiterId] = useState('')
   const [arbeitsplatzId, setArbeitsplatzId] = useState('')
-  const [status, setStatus] = useState('geplant')
 
   const [bearbeitenId, setBearbeitenId] = useState<string | null>(null)
   const [bearbeitenTitel, setBearbeitenTitel] = useState('')
   const [bearbeitenBeschreibung, setBearbeitenBeschreibung] = useState('')
-  const [bearbeitenStart, setBearbeitenStart] = useState('')
-  const [bearbeitenEnde, setBearbeitenEnde] = useState('')
-  const [bearbeitenAuftragId, setBearbeitenAuftragId] = useState('')
+  const [bearbeitenStartzeit, setBearbeitenStartzeit] = useState('')
+  const [bearbeitenEndzeit, setBearbeitenEndzeit] = useState('')
+  const [bearbeitenStatus, setBearbeitenStatus] = useState('geplant')
+  const [bearbeitenServiceauftragId, setBearbeitenServiceauftragId] = useState('')
   const [bearbeitenMitarbeiterId, setBearbeitenMitarbeiterId] = useState('')
   const [bearbeitenArbeitsplatzId, setBearbeitenArbeitsplatzId] = useState('')
-  const [bearbeitenStatus, setBearbeitenStatus] = useState('geplant')
 
-  const [aktuellerMonat, setAktuellerMonat] = useState(new Date())
-  const [tageFilter, setTageFilter] = useState(new Date().toISOString().slice(0, 10))
-  const [mitarbeiterFilter, setMitarbeiterFilter] = useState('alle')
-  const [arbeitsplatzFilter, setArbeitsplatzFilter] = useState('alle')
-  const [statusFilter, setStatusFilter] = useState('alle')
   const [fehler, setFehler] = useState('')
+  const [meldung, setMeldung] = useState('')
 
-  async function ladeBasis() {
-    const [tRes, sRes, mRes, aRes, schRes] = await Promise.all([
-      supabase.from('termine').select('*').order('startzeit'),
-      supabase.from('serviceauftraege').select('id, art'),
-      supabase.from('mitarbeiter').select('id, vorname, nachname'),
-      supabase.from('arbeitsplaetze').select('*').eq('aktiv', true).order('name'),
-      supabase.from('mitarbeiter_schichten').select('*').order('datum').order('startzeit'),
+  async function laden() {
+    setFehler('')
+
+    const [tRes, sRes, mRes, aRes] = await Promise.all([
+      supabase.from('termine').select('*'),
+      supabase.from('serviceauftraege').select('id, art').order('art'),
+      supabase.from('mitarbeiter').select('id, vorname, nachname').order('vorname'),
+      supabase.from('arbeitsplaetze').select('id, name, typ, aktiv').order('name'),
     ])
 
-    if (tRes.error || sRes.error || mRes.error || aRes.error || schRes.error) {
+    if (tRes.error || sRes.error || mRes.error || aRes.error) {
       setFehler(
         tRes.error?.message ||
           sRes.error?.message ||
           mRes.error?.message ||
           aRes.error?.message ||
-          schRes.error?.message ||
           ''
       )
       return
     }
 
-    const geladeneTermine = (tRes.data || []) as Termin[]
-    await konflikteBerechnenUndSpeichern(geladeneTermine)
+    const termineSortiert = ((tRes.data || []) as Termin[]).sort((a, b) => {
+      const now = Date.now()
+      const aTime = a.startzeit ? new Date(a.startzeit).getTime() : 0
+      const bTime = b.startzeit ? new Date(b.startzeit).getTime() : 0
+      const aDiff = Math.abs(aTime - now)
+      const bDiff = Math.abs(bTime - now)
+      return aDiff - bDiff
+    })
 
-    const { data: termineNeu, error: termineNeuError } = await supabase
-      .from('termine')
-      .select('*')
-      .order('startzeit')
-
-    if (termineNeuError) {
-      setFehler(termineNeuError.message)
-      return
-    }
-
-    setTermine((termineNeu || []) as Termin[])
-    setServiceauftraege(sRes.data || [])
-    setMitarbeiter(mRes.data || [])
-    setArbeitsplaetze((aRes.data || []) as Arbeitsplatz[])
-    setSchichten((schRes.data || []) as Schicht[])
-  }
-
-  async function konflikteBerechnenUndSpeichern(alleTermine: Termin[]) {
-    for (const termin of alleTermine) {
-      const konfliktMitarbeiter = alleTermine.some((anderer) => {
-        if (anderer.id === termin.id) return false
-        if (!termin.mitarbeiter_id || !anderer.mitarbeiter_id) return false
-        if (anderer.mitarbeiter_id !== termin.mitarbeiter_id) return false
-        return zeitenUeberschneiden(
-          termin.startzeit,
-          termin.endzeit,
-          anderer.startzeit,
-          anderer.endzeit
-        )
-      })
-
-      const konfliktArbeitsplatz = alleTermine.some((anderer) => {
-        if (anderer.id === termin.id) return false
-
-        const gleicherPlatz =
-          (termin.arbeitsplatz_id && anderer.arbeitsplatz_id && termin.arbeitsplatz_id === anderer.arbeitsplatz_id) ||
-          (!termin.arbeitsplatz_id && !anderer.arbeitsplatz_id && termin.arbeitsplatz && anderer.arbeitsplatz && termin.arbeitsplatz === anderer.arbeitsplatz)
-
-        if (!gleicherPlatz) return false
-
-        return zeitenUeberschneiden(
-          termin.startzeit,
-          termin.endzeit,
-          anderer.startzeit,
-          anderer.endzeit
-        )
-      })
-
-      const konfliktGesamt = konfliktMitarbeiter || konfliktArbeitsplatz
-
-      if (
-        konfliktMitarbeiter !== Boolean(termin.konflikt_mitarbeiter) ||
-        konfliktArbeitsplatz !== Boolean(termin.konflikt_arbeitsplatz) ||
-        konfliktGesamt !== Boolean(termin.konflikt_gesamt)
-      ) {
-        await supabase
-          .from('termine')
-          .update({
-            konflikt_mitarbeiter: konfliktMitarbeiter,
-            konflikt_arbeitsplatz: konfliktArbeitsplatz,
-            konflikt_gesamt: konfliktGesamt,
-          })
-          .eq('id', termin.id)
-      }
-    }
+    setTermine(termineSortiert)
+    setServiceauftraege((sRes.data || []) as Serviceauftrag[])
+    setMitarbeiter((mRes.data || []) as Mitarbeiter[])
+    setArbeitsplaetze(((aRes.data || []) as Arbeitsplatz[]).filter((a) => a.aktiv !== false))
   }
 
   useEffect(() => {
-    ladeBasis()
+    laden()
   }, [])
 
+  function serviceauftragName(id: string | null) {
+    const s = serviceauftraege.find((x) => x.id === id)
+    return s ? s.art || s.id : '-'
+  }
+
   function mitarbeiterName(id: string | null) {
-    if (!id) return '-'
-    const person = mitarbeiter.find((m) => m.id === id)
-    if (!person) return '-'
-    return `${person.vorname || ''} ${person.nachname || ''}`.trim()
+    const m = mitarbeiter.find((x) => x.id === id)
+    return m ? `${m.vorname || ''} ${m.nachname || ''}`.trim() : '-'
   }
 
-  function auftragName(id: string | null) {
-    if (!id) return '-'
-    const auftrag = serviceauftraege.find((s) => s.id === id)
-    return auftrag?.art || id
-  }
-
-  function arbeitsplatzName(id: string | null, fallback: string | null | undefined) {
-    if (id) {
-      const platz = arbeitsplaetze.find((a) => a.id === id)
-      if (platz) return platz.name
-    }
-    return fallback || '-'
-  }
-
-  function schichtFuerTermin(mitarbeiterIdValue: string | null, startZeit: string, endZeit: string | null) {
-    if (!mitarbeiterIdValue) return null
-
-    const startDate = new Date(startZeit)
-    const datum = startDate.toISOString().slice(0, 10)
-    const startOnly = startDate.toTimeString().slice(0, 5)
-    const endeOnly = endZeit ? new Date(endZeit).toTimeString().slice(0, 5) : startOnly
-
-    return schichten.find((s) => {
-      if (s.mitarbeiter_id !== mitarbeiterIdValue) return false
-      if (s.datum !== datum) return false
-      return s.startzeit <= startOnly && s.endzeit >= endeOnly
-    }) || null
+  function arbeitsplatzName(id: string | null) {
+    const a = arbeitsplaetze.find((x) => x.id === id)
+    return a ? `${a.name || '-'}${a.typ ? ` – ${a.typ}` : ''}` : '-'
   }
 
   async function erstellen(e: React.FormEvent) {
     e.preventDefault()
     setFehler('')
+    setMeldung('')
 
     if (!titel.trim()) {
       setFehler('Bitte einen Titel eingeben.')
       return
     }
 
-    if (!start) {
-      setFehler('Bitte eine Startzeit angeben.')
+    if (!startzeit) {
+      setFehler('Bitte eine Startzeit wählen.')
       return
     }
 
-    const schicht = schichtFuerTermin(mitarbeiterId || null, start, ende || null)
-
-    if (mitarbeiterId && !schicht) {
-      setFehler('Der Termin liegt außerhalb der hinterlegten Schicht des Mitarbeiters.')
+    if (endzeit && new Date(endzeit).getTime() < new Date(startzeit).getTime()) {
+      setFehler('Die Endzeit darf nicht vor der Startzeit liegen.')
       return
     }
-
-    const platz = arbeitsplaetze.find((a) => a.id === arbeitsplatzId)
 
     const { error } = await supabase.from('termine').insert({
       titel: titel.trim(),
       beschreibung: beschreibung || null,
-      startzeit: start,
-      endzeit: ende || null,
-      serviceauftrag_id: auftragId || null,
+      startzeit: startzeit || null,
+      endzeit: endzeit || null,
+      status,
+      serviceauftrag_id: serviceauftragId || null,
       mitarbeiter_id: mitarbeiterId || null,
       arbeitsplatz_id: arbeitsplatzId || null,
-      arbeitsplatz: platz?.name || null,
-      status,
     })
 
     if (error) {
@@ -337,68 +164,76 @@ function TermineContent() {
 
     setTitel('')
     setBeschreibung('')
-    setStart('')
-    setEnde('')
-    setAuftragId('')
+    setStartzeit('')
+    setEndzeit('')
+    setStatus('geplant')
+    setServiceauftragId('')
     setMitarbeiterId('')
     setArbeitsplatzId('')
-    setStatus('geplant')
-    ladeBasis()
+    setMeldung('Termin wurde erstellt.')
+    laden()
   }
 
   function bearbeitenStarten(t: Termin) {
     setBearbeitenId(t.id)
     setBearbeitenTitel(t.titel || '')
     setBearbeitenBeschreibung(t.beschreibung || '')
-    setBearbeitenStart(datetimeLocalValue(t.startzeit))
-    setBearbeitenEnde(datetimeLocalValue(t.endzeit))
-    setBearbeitenAuftragId(t.serviceauftrag_id || '')
+    setBearbeitenStartzeit(t.startzeit ? t.startzeit.slice(0, 16) : '')
+    setBearbeitenEndzeit(t.endzeit ? t.endzeit.slice(0, 16) : '')
+    setBearbeitenStatus(t.status || 'geplant')
+    setBearbeitenServiceauftragId(t.serviceauftrag_id || '')
     setBearbeitenMitarbeiterId(t.mitarbeiter_id || '')
     setBearbeitenArbeitsplatzId(t.arbeitsplatz_id || '')
-    setBearbeitenStatus(t.status || 'geplant')
   }
 
   function bearbeitenAbbrechen() {
     setBearbeitenId(null)
     setBearbeitenTitel('')
     setBearbeitenBeschreibung('')
-    setBearbeitenStart('')
-    setBearbeitenEnde('')
-    setBearbeitenAuftragId('')
+    setBearbeitenStartzeit('')
+    setBearbeitenEndzeit('')
+    setBearbeitenStatus('geplant')
+    setBearbeitenServiceauftragId('')
     setBearbeitenMitarbeiterId('')
     setBearbeitenArbeitsplatzId('')
-    setBearbeitenStatus('geplant')
   }
 
-  async function speichern(e: React.FormEvent) {
+  async function bearbeitenSpeichern(e: React.FormEvent) {
     e.preventDefault()
+    setFehler('')
+    setMeldung('')
+
     if (!bearbeitenId) return
 
-    const schicht = schichtFuerTermin(
-      bearbeitenMitarbeiterId || null,
-      bearbeitenStart,
-      bearbeitenEnde || null
-    )
-
-    if (bearbeitenMitarbeiterId && !schicht) {
-      setFehler('Der bearbeitete Termin liegt außerhalb der hinterlegten Schicht.')
+    if (!bearbeitenTitel.trim()) {
+      setFehler('Bitte einen Titel eingeben.')
       return
     }
 
-    const platz = arbeitsplaetze.find((a) => a.id === bearbeitenArbeitsplatzId)
+    if (!bearbeitenStartzeit) {
+      setFehler('Bitte eine Startzeit wählen.')
+      return
+    }
+
+    if (
+      bearbeitenEndzeit &&
+      new Date(bearbeitenEndzeit).getTime() < new Date(bearbeitenStartzeit).getTime()
+    ) {
+      setFehler('Die Endzeit darf nicht vor der Startzeit liegen.')
+      return
+    }
 
     const { error } = await supabase
       .from('termine')
       .update({
         titel: bearbeitenTitel.trim(),
         beschreibung: bearbeitenBeschreibung || null,
-        startzeit: bearbeitenStart,
-        endzeit: bearbeitenEnde || null,
-        serviceauftrag_id: bearbeitenAuftragId || null,
+        startzeit: bearbeitenStartzeit || null,
+        endzeit: bearbeitenEndzeit || null,
+        status: bearbeitenStatus,
+        serviceauftrag_id: bearbeitenServiceauftragId || null,
         mitarbeiter_id: bearbeitenMitarbeiterId || null,
         arbeitsplatz_id: bearbeitenArbeitsplatzId || null,
-        arbeitsplatz: platz?.name || null,
-        status: bearbeitenStatus,
       })
       .eq('id', bearbeitenId)
 
@@ -408,10 +243,14 @@ function TermineContent() {
     }
 
     bearbeitenAbbrechen()
-    ladeBasis()
+    setMeldung('Termin wurde gespeichert.')
+    laden()
   }
 
   async function loeschen(id: string) {
+    setFehler('')
+    setMeldung('')
+
     const ok = window.confirm('Termin wirklich löschen?')
     if (!ok) return
 
@@ -422,94 +261,18 @@ function TermineContent() {
       return
     }
 
-    ladeBasis()
+    setMeldung('Termin wurde gelöscht.')
+    laden()
   }
-
-  async function statusSchnellwechsel(id: string, neuerStatus: string) {
-    const { error } = await supabase
-      .from('termine')
-      .update({ status: neuerStatus })
-      .eq('id', id)
-
-    if (error) {
-      setFehler(error.message)
-      return
-    }
-
-    ladeBasis()
-  }
-
-  const kalenderTage = useMemo(() => {
-    const start = startOfCalendar(aktuellerMonat)
-    return Array.from({ length: 42 }, (_, i) => addDays(start, i))
-  }, [aktuellerMonat])
-
-  const gefilterteTermine = useMemo(() => {
-    return termine.filter((t) => {
-      const tagOk = sameDay(new Date(t.startzeit), new Date(tageFilter))
-      const mitarbeiterOk =
-        mitarbeiterFilter === 'alle' || t.mitarbeiter_id === mitarbeiterFilter
-      const arbeitsplatzOk =
-        arbeitsplatzFilter === 'alle' || t.arbeitsplatz_id === arbeitsplatzFilter
-      const statusOk = statusFilter === 'alle' || t.status === statusFilter
-
-      return tagOk && mitarbeiterOk && arbeitsplatzOk && statusOk
-    })
-  }, [termine, tageFilter, mitarbeiterFilter, arbeitsplatzFilter, statusFilter])
-
-  function termineFuerTag(tag: Date) {
-    return termine.filter((t) => sameDay(new Date(t.startzeit), tag))
-  }
-
-  const boardNachStatus = useMemo(() => {
-    const statusListe = ['geplant', 'bestaetigt', 'in_arbeit', 'abgeschlossen', 'verschoben', 'storniert']
-    return statusListe.map((statusName) => ({
-      status: statusName,
-      termine: gefilterteTermine.filter((t) => t.status === statusName),
-    }))
-  }, [gefilterteTermine])
-
-  const kapazitaet = useMemo(() => {
-    const aktiveMitarbeiter = schichten.filter((s) => s.datum === tageFilter).length
-    const aktivePlaetze = arbeitsplaetze.filter((a) => a.aktiv).length
-    const termineHeute = gefilterteTermine.length
-    const konflikte = gefilterteTermine.filter((t) => t.konflikt_gesamt).length
-
-    return {
-      aktiveMitarbeiter,
-      aktivePlaetze,
-      termineHeute,
-      konflikte,
-    }
-  }, [schichten, arbeitsplaetze, gefilterteTermine, tageFilter])
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       <div className="topbar">
         <div>
-          <h1 className="topbar-title">Kalender / Werkstattplanung</h1>
+          <h1 className="topbar-title">Termine</h1>
           <div className="topbar-subtitle">
-            Kapazität, Arbeitsplätze, Schichten und Status in einer Ansicht.
+            Automatisch nach dem zeitlich nächsten Termin sortiert, mit Bearbeiten und Löschen.
           </div>
-        </div>
-      </div>
-
-      <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-label">Schichten am Tag</div>
-          <div className="stat-value">{kapazitaet.aktiveMitarbeiter}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Aktive Arbeitsplätze</div>
-          <div className="stat-value">{kapazitaet.aktivePlaetze}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Gefilterte Termine</div>
-          <div className="stat-value">{kapazitaet.termineHeute}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Konflikte</div>
-          <div className="stat-value">{kapazitaet.konflikte}</div>
         </div>
       </div>
 
@@ -530,43 +293,6 @@ function TermineContent() {
             <option value="verschoben">verschoben</option>
             <option value="storniert">storniert</option>
           </select>
-          <select value={arbeitsplatzId} onChange={(e) => setArbeitsplatzId(e.target.value)}>
-            <option value="">Kein Arbeitsplatz</option>
-            {arbeitsplaetze.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name} {a.typ ? `- ${a.typ}` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="form-row" style={{ marginTop: 12 }}>
-          <input
-            type="datetime-local"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-          />
-          <input
-            type="datetime-local"
-            value={ende}
-            onChange={(e) => setEnde(e.target.value)}
-          />
-          <select value={auftragId} onChange={(e) => setAuftragId(e.target.value)}>
-            <option value="">Kein Serviceauftrag</option>
-            {serviceauftraege.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.art || s.id}
-              </option>
-            ))}
-          </select>
-          <select value={mitarbeiterId} onChange={(e) => setMitarbeiterId(e.target.value)}>
-            <option value="">Kein Mitarbeiter</option>
-            {mitarbeiter.map((m) => (
-              <option key={m.id} value={m.id}>
-                {`${m.vorname || ''} ${m.nachname || ''}`.trim()}
-              </option>
-            ))}
-          </select>
         </div>
 
         <div style={{ marginTop: 12 }}>
@@ -574,8 +300,59 @@ function TermineContent() {
             placeholder="Beschreibung"
             value={beschreibung}
             onChange={(e) => setBeschreibung(e.target.value)}
-            style={{ width: '100%', minHeight: 90 }}
+            style={{ width: '100%', minHeight: 100 }}
           />
+        </div>
+
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <input
+            type="datetime-local"
+            value={startzeit}
+            onChange={(e) => setStartzeit(e.target.value)}
+          />
+          <input
+            type="datetime-local"
+            value={endzeit}
+            onChange={(e) => setEndzeit(e.target.value)}
+          />
+        </div>
+
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <select
+            value={serviceauftragId}
+            onChange={(e) => setServiceauftragId(e.target.value)}
+          >
+            <option value="">Serviceauftrag auswählen</option>
+            {serviceauftraege.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.art || s.id}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={mitarbeiterId}
+            onChange={(e) => setMitarbeiterId(e.target.value)}
+          >
+            <option value="">Mitarbeiter auswählen</option>
+            {mitarbeiter.map((m) => (
+              <option key={m.id} value={m.id}>
+                {`${m.vorname || ''} ${m.nachname || ''}`.trim()}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={arbeitsplatzId}
+            onChange={(e) => setArbeitsplatzId(e.target.value)}
+          >
+            <option value="">Arbeitsplatz auswählen</option>
+            {arbeitsplaetze.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name || a.id} {a.typ ? `– ${a.typ}` : ''}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="action-row">
@@ -584,7 +361,7 @@ function TermineContent() {
       </form>
 
       {bearbeitenId && (
-        <form onSubmit={speichern} className="page-card">
+        <form onSubmit={bearbeitenSpeichern} className="page-card">
           <h2 style={{ marginTop: 0 }}>Termin bearbeiten</h2>
 
           <div className="form-row">
@@ -604,52 +381,6 @@ function TermineContent() {
               <option value="verschoben">verschoben</option>
               <option value="storniert">storniert</option>
             </select>
-            <select
-              value={bearbeitenArbeitsplatzId}
-              onChange={(e) => setBearbeitenArbeitsplatzId(e.target.value)}
-            >
-              <option value="">Kein Arbeitsplatz</option>
-              {arbeitsplaetze.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} {a.typ ? `- ${a.typ}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-row" style={{ marginTop: 12 }}>
-            <input
-              type="datetime-local"
-              value={bearbeitenStart}
-              onChange={(e) => setBearbeitenStart(e.target.value)}
-            />
-            <input
-              type="datetime-local"
-              value={bearbeitenEnde}
-              onChange={(e) => setBearbeitenEnde(e.target.value)}
-            />
-            <select
-              value={bearbeitenAuftragId}
-              onChange={(e) => setBearbeitenAuftragId(e.target.value)}
-            >
-              <option value="">Kein Serviceauftrag</option>
-              {serviceauftraege.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.art || s.id}
-                </option>
-              ))}
-            </select>
-            <select
-              value={bearbeitenMitarbeiterId}
-              onChange={(e) => setBearbeitenMitarbeiterId(e.target.value)}
-            >
-              <option value="">Kein Mitarbeiter</option>
-              {mitarbeiter.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {`${m.vorname || ''} ${m.nachname || ''}`.trim()}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div style={{ marginTop: 12 }}>
@@ -657,8 +388,59 @@ function TermineContent() {
               placeholder="Beschreibung"
               value={bearbeitenBeschreibung}
               onChange={(e) => setBearbeitenBeschreibung(e.target.value)}
-              style={{ width: '100%', minHeight: 90 }}
+              style={{ width: '100%', minHeight: 100 }}
             />
+          </div>
+
+          <div className="form-row" style={{ marginTop: 12 }}>
+            <input
+              type="datetime-local"
+              value={bearbeitenStartzeit}
+              onChange={(e) => setBearbeitenStartzeit(e.target.value)}
+            />
+            <input
+              type="datetime-local"
+              value={bearbeitenEndzeit}
+              onChange={(e) => setBearbeitenEndzeit(e.target.value)}
+            />
+          </div>
+
+          <div className="form-row" style={{ marginTop: 12 }}>
+            <select
+              value={bearbeitenServiceauftragId}
+              onChange={(e) => setBearbeitenServiceauftragId(e.target.value)}
+            >
+              <option value="">Serviceauftrag auswählen</option>
+              {serviceauftraege.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.art || s.id}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={bearbeitenMitarbeiterId}
+              onChange={(e) => setBearbeitenMitarbeiterId(e.target.value)}
+            >
+              <option value="">Mitarbeiter auswählen</option>
+              {mitarbeiter.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {`${m.vorname || ''} ${m.nachname || ''}`.trim()}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={bearbeitenArbeitsplatzId}
+              onChange={(e) => setBearbeitenArbeitsplatzId(e.target.value)}
+            >
+              <option value="">Arbeitsplatz auswählen</option>
+              {arbeitsplaetze.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name || a.id} {a.typ ? `– ${a.typ}` : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="action-row">
@@ -671,242 +453,6 @@ function TermineContent() {
       )}
 
       <div className="page-card">
-        <div className="topbar" style={{ marginBottom: 0 }}>
-          <button
-            type="button"
-            onClick={() =>
-              setAktuellerMonat(
-                new Date(aktuellerMonat.getFullYear(), aktuellerMonat.getMonth() - 1, 1)
-              )
-            }
-          >
-            Voriger Monat
-          </button>
-
-          <div style={{ fontSize: 22, fontWeight: 700 }}>
-            {formatMonthTitle(aktuellerMonat)}
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              setAktuellerMonat(
-                new Date(aktuellerMonat.getFullYear(), aktuellerMonat.getMonth() + 1, 1)
-              )
-            }
-          >
-            Nächster Monat
-          </button>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(7, minmax(180px, 1fr))',
-          gap: 12,
-          alignItems: 'start',
-          overflowX: 'auto',
-        }}
-      >
-        {kalenderTage.map((tag) => {
-          const istAndererMonat = tag.getMonth() !== aktuellerMonat.getMonth()
-          const tagTermine = termineFuerTag(tag)
-
-          return (
-            <div
-              key={tag.toISOString()}
-              style={{
-                minHeight: 220,
-                borderRadius: 16,
-                border: '1px solid #e5e7eb',
-                background: istAndererMonat ? '#f8fafc' : 'white',
-                padding: 12,
-                boxShadow: '0 6px 16px rgba(15,23,42,0.05)',
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 700,
-                  marginBottom: 10,
-                  color: istAndererMonat ? '#94a3b8' : '#111827',
-                }}
-              >
-                {dayLabel(tag)}
-              </div>
-
-              {tagTermine.length === 0 ? (
-                <div className="muted">Keine Termine</div>
-              ) : (
-                tagTermine.map((t) => (
-                  <div
-                    key={t.id}
-                    style={{
-                      marginBottom: 10,
-                      padding: 10,
-                      borderRadius: 12,
-                      background: konfliktHintergrund(t),
-                      border: t.konflikt_gesamt ? '1px solid #fca5a5' : '1px solid #dbeafe',
-                    }}
-                  >
-                    <strong>{t.titel || '-'}</strong>
-                    <br />
-                    <span style={{ fontSize: 13 }}>
-                      {new Date(t.startzeit).toLocaleTimeString('de-DE', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                      {t.endzeit
-                        ? ` - ${new Date(t.endzeit).toLocaleTimeString('de-DE', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}`
-                        : ''}
-                    </span>
-                    <br />
-                    <span style={{ fontSize: 13 }}>
-                      Mitarbeiter: {mitarbeiterName(t.mitarbeiter_id)}
-                    </span>
-                    <br />
-                    <span style={{ fontSize: 13 }}>
-                      Platz: {arbeitsplatzName(t.arbeitsplatz_id, t.arbeitsplatz)}
-                    </span>
-                    <br />
-                    <span style={{ fontSize: 13 }}>
-                      Auftrag: {auftragName(t.serviceauftrag_id)}
-                    </span>
-                    <br />
-                    <div style={{ marginTop: 6 }}>
-                      <StatusBadge status={t.status} />
-                    </div>
-                    {t.konflikt_mitarbeiter && (
-                      <div style={{ fontSize: 12, color: '#991b1b', marginTop: 6 }}>
-                        Konflikt Mitarbeiter
-                      </div>
-                    )}
-                    {t.konflikt_arbeitsplatz && (
-                      <div style={{ fontSize: 12, color: '#991b1b', marginTop: 4 }}>
-                        Konflikt Arbeitsplatz
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="page-card">
-        <h2 style={{ marginTop: 0 }}>Werkstattboard nach Status</h2>
-
-        <div className="form-row" style={{ marginBottom: 16 }}>
-          <input type="date" value={tageFilter} onChange={(e) => setTageFilter(e.target.value)} />
-
-          <select value={mitarbeiterFilter} onChange={(e) => setMitarbeiterFilter(e.target.value)}>
-            <option value="alle">Alle Mitarbeiter</option>
-            {mitarbeiter.map((m) => (
-              <option key={m.id} value={m.id}>
-                {`${m.vorname || ''} ${m.nachname || ''}`.trim()}
-              </option>
-            ))}
-          </select>
-
-          <select value={arbeitsplatzFilter} onChange={(e) => setArbeitsplatzFilter(e.target.value)}>
-            <option value="alle">Alle Arbeitsplätze</option>
-            {arbeitsplaetze.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="alle">Alle Status</option>
-            <option value="geplant">geplant</option>
-            <option value="bestaetigt">bestaetigt</option>
-            <option value="in_arbeit">in_arbeit</option>
-            <option value="abgeschlossen">abgeschlossen</option>
-            <option value="verschoben">verschoben</option>
-            <option value="storniert">storniert</option>
-          </select>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: 14,
-          }}
-        >
-          {boardNachStatus.map((spalte) => (
-            <div
-              key={spalte.status}
-              style={{
-                border: '1px solid #e5e7eb',
-                borderRadius: 16,
-                padding: 14,
-                background: 'white',
-              }}
-            >
-              <strong>{spalte.status}</strong>
-              <div style={{ marginTop: 12 }}>
-                {spalte.termine.length === 0 ? (
-                  <div className="muted">Keine Termine</div>
-                ) : (
-                  spalte.termine.map((t) => (
-                    <div
-                      key={t.id}
-                      className="list-box"
-                      style={{ background: konfliktHintergrund(t) }}
-                    >
-                      <strong>{t.titel || '-'}</strong>
-                      <br />
-                      {new Date(t.startzeit).toLocaleTimeString('de-DE', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                      {t.endzeit
-                        ? ` - ${new Date(t.endzeit).toLocaleTimeString('de-DE', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}`
-                        : ''}
-                      <br />
-                      Mitarbeiter: {mitarbeiterName(t.mitarbeiter_id)}
-                      <br />
-                      Platz: {arbeitsplatzName(t.arbeitsplatz_id, t.arbeitsplatz)}
-                      <br />
-                      Auftrag: {auftragName(t.serviceauftrag_id)}
-                      <br />
-                      <div style={{ marginTop: 8 }}>
-                        <StatusBadge status={t.status} />
-                      </div>
-
-                      <div className="action-row">
-                        <button type="button" onClick={() => bearbeitenStarten(t)}>
-                          Bearbeiten
-                        </button>
-                        <button type="button" onClick={() => statusSchnellwechsel(t.id, 'in_arbeit')}>
-                          In Arbeit
-                        </button>
-                        <button type="button" onClick={() => statusSchnellwechsel(t.id, 'abgeschlossen')}>
-                          Abschließen
-                        </button>
-                        <button type="button" onClick={() => loeschen(t.id)} style={{ background: '#dc2626' }}>
-                          Löschen
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="page-card">
         <h2 style={{ marginTop: 0 }}>Terminliste</h2>
 
         {termine.map((t) => (
@@ -915,29 +461,39 @@ function TermineContent() {
             <br />
             Beschreibung: {t.beschreibung || '-'}
             <br />
-            Start: {formatDatum(t.startzeit)}
+            Start: {t.startzeit ? new Date(t.startzeit).toLocaleString('de-DE') : '-'}
             <br />
-            Ende: {t.endzeit ? formatDatum(t.endzeit) : '-'}
+            Ende: {t.endzeit ? new Date(t.endzeit).toLocaleString('de-DE') : '-'}
             <br />
-            Auftrag: {auftragName(t.serviceauftrag_id)}
+            Serviceauftrag: {serviceauftragName(t.serviceauftrag_id)}
             <br />
             Mitarbeiter: {mitarbeiterName(t.mitarbeiter_id)}
             <br />
-            Arbeitsplatz: {arbeitsplatzName(t.arbeitsplatz_id, t.arbeitsplatz)}
-            <br />
-            Konflikt Mitarbeiter: {t.konflikt_mitarbeiter ? 'ja' : 'nein'}
-            <br />
-            Konflikt Arbeitsplatz: {t.konflikt_arbeitsplatz ? 'ja' : 'nein'}
+            Arbeitsplatz: {arbeitsplatzName(t.arbeitsplatz_id)}
             <br />
             <div style={{ marginTop: 8 }}>
-              <StatusBadge status={t.status} />
+              <StatusBadge status={t.status || 'geplant'} />
+            </div>
+
+            <div className="action-row" style={{ marginTop: 10 }}>
+              <button type="button" onClick={() => bearbeitenStarten(t)}>
+                Bearbeiten
+              </button>
+              <button
+                type="button"
+                onClick={() => loeschen(t.id)}
+                style={{ background: '#dc2626' }}
+              >
+                Löschen
+              </button>
             </div>
           </div>
         ))}
 
-        {termine.length === 0 && <div className="muted">Keine Termine vorhanden.</div>}
+        {termine.length === 0 && <div className="muted">Noch keine Termine vorhanden.</div>}
       </div>
 
+      {meldung && <div className="badge badge-success">{meldung}</div>}
       {fehler && <div className="error-box">{fehler}</div>}
     </div>
   )

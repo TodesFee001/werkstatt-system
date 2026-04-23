@@ -1,23 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useMemo, useState } from 'react'
 import RoleGuard from '../components/RoleGuard'
-
-type Kunde = {
-  id: string
-  vorname: string | null
-  nachname: string | null
-  firmenname: string | null
-}
+import StatusBadge from '../components/StatusBadge'
+import { supabase } from '@/lib/supabase'
 
 type Rechnung = {
   id: string
   rechnungsnummer: string | null
   kunde_id: string | null
   brutto_summe: number | null
-  status: string | null
   offener_betrag: number | null
+  status: string | null
+  faellig_am: string | null
+  mahnstufe: number | null
+  letzte_mahnung_am: string | null
+  forderungsstatus: string | null
 }
 
 type Zahlung = {
@@ -25,382 +23,353 @@ type Zahlung = {
   rechnung_id: string | null
   zahlungsdatum: string | null
   betrag: number | null
-  zahlungsart: string | null
   status: string | null
-  referenz: string | null
-  bemerkung: string | null
-  storniert: boolean | null
+  zahlungsart: string | null
+  notiz: string | null
+}
+
+const ZAHLUNGSSTATUS = ['offen', 'teilbezahlt', 'bezahlt', 'storniert'] as const
+
+export default function ZahlungenPage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Serviceannahme']}>
+      <ZahlungenPageContent />
+    </RoleGuard>
+  )
 }
 
 function ZahlungenPageContent() {
-  const [kunden, setKunden] = useState<Kunde[]>([])
   const [rechnungen, setRechnungen] = useState<Rechnung[]>([])
   const [zahlungen, setZahlungen] = useState<Zahlung[]>([])
 
-  const [zahlungRechnungId, setZahlungRechnungId] = useState('')
-  const [zahlungBetrag, setZahlungBetrag] = useState('')
-  const [zahlungArt, setZahlungArt] = useState('bar')
-  const [zahlungStatus, setZahlungStatus] = useState('gebucht')
-  const [zahlungReferenz, setZahlungReferenz] = useState('')
-  const [zahlungBemerkung, setZahlungBemerkung] = useState('')
-
-  const [bearbeitenId, setBearbeitenId] = useState<string | null>(null)
-  const [bearbeitenBetrag, setBearbeitenBetrag] = useState('')
-  const [bearbeitenArt, setBearbeitenArt] = useState('bar')
-  const [bearbeitenStatus, setBearbeitenStatus] = useState('gebucht')
-  const [bearbeitenReferenz, setBearbeitenReferenz] = useState('')
-  const [bearbeitenBemerkung, setBearbeitenBemerkung] = useState('')
+  const [rechnungId, setRechnungId] = useState('')
+  const [zahlungsdatum, setZahlungsdatum] = useState(new Date().toISOString().slice(0, 10))
+  const [betrag, setBetrag] = useState('')
+  const [status, setStatus] = useState<(typeof ZAHLUNGSSTATUS)[number]>('bezahlt')
+  const [zahlungsart, setZahlungsart] = useState('bar')
+  const [notiz, setNotiz] = useState('')
 
   const [fehler, setFehler] = useState('')
+  const [meldung, setMeldung] = useState('')
 
-  async function ladeKunden() {
-    const { data, error } = await supabase.from('kunden').select('*')
-    if (error) return setFehler(error.message)
-    setKunden(data || [])
-  }
+  async function laden() {
+    const [rRes, zRes] = await Promise.all([
+      supabase.from('rechnungen').select('*').order('created_at', { ascending: false }),
+      supabase.from('zahlungen').select('*').order('zahlungsdatum', { ascending: false }),
+    ])
 
-  async function ladeRechnungen() {
-    const { data, error } = await supabase.from('rechnungen').select('*')
-    if (error) return setFehler(error.message)
-    setRechnungen(data || [])
-  }
+    if (rRes.error || zRes.error) {
+      setFehler(rRes.error?.message || zRes.error?.message || '')
+      return
+    }
 
-  async function ladeZahlungen() {
-    const { data, error } = await supabase
-      .from('zahlungen')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) return setFehler(error.message)
-    setZahlungen(data || [])
+    setRechnungen((rRes.data || []) as Rechnung[])
+    setZahlungen((zRes.data || []) as Zahlung[])
   }
 
   useEffect(() => {
-    ladeKunden()
-    ladeRechnungen()
-    ladeZahlungen()
+    laden()
   }, [])
-
-  function berechneRechnungsstatus(brutto: number, offen: number) {
-    if (offen <= 0) return 'bezahlt'
-    if (offen < brutto) return 'teilbezahlt'
-    return 'offen'
-  }
-
-  async function zahlungAnlegen(e: React.FormEvent) {
-    e.preventDefault()
-    setFehler('')
-
-    if (!zahlungRechnungId) return setFehler('Bitte eine Rechnung auswählen.')
-    if (!zahlungBetrag) return setFehler('Bitte einen Betrag eingeben.')
-
-    const betrag = Number(zahlungBetrag)
-    if (betrag <= 0) return setFehler('Betrag muss größer als 0 sein.')
-
-    const { error } = await supabase.from('zahlungen').insert({
-      rechnung_id: zahlungRechnungId,
-      zahlungsdatum: new Date().toISOString().slice(0, 10),
-      betrag,
-      zahlungsart: zahlungArt,
-      status: zahlungStatus,
-      referenz: zahlungReferenz || null,
-      bemerkung: zahlungBemerkung || null,
-      storniert: false,
-    })
-
-    if (error) return setFehler(error.message)
-
-    const { data: rechnung } = await supabase
-      .from('rechnungen')
-      .select('*')
-      .eq('id', zahlungRechnungId)
-      .single()
-
-    if (rechnung) {
-      const brutto = Number(rechnung.brutto_summe || 0)
-      const neuerOffenerBetrag = Math.max(Number(rechnung.offener_betrag || 0) - betrag, 0)
-      const neuerStatus = berechneRechnungsstatus(brutto, neuerOffenerBetrag)
-
-      await supabase
-        .from('rechnungen')
-        .update({
-          offener_betrag: neuerOffenerBetrag,
-          status: neuerStatus,
-        })
-        .eq('id', zahlungRechnungId)
-    }
-
-    setZahlungRechnungId('')
-    setZahlungBetrag('')
-    setZahlungArt('bar')
-    setZahlungStatus('gebucht')
-    setZahlungReferenz('')
-    setZahlungBemerkung('')
-
-    ladeZahlungen()
-    ladeRechnungen()
-  }
-
-  function bearbeitenStarten(zahlung: Zahlung) {
-    setBearbeitenId(zahlung.id)
-    setBearbeitenBetrag(String(zahlung.betrag ?? ''))
-    setBearbeitenArt(zahlung.zahlungsart || 'bar')
-    setBearbeitenStatus(zahlung.status || 'gebucht')
-    setBearbeitenReferenz(zahlung.referenz || '')
-    setBearbeitenBemerkung(zahlung.bemerkung || '')
-  }
-
-  function bearbeitenAbbrechen() {
-    setBearbeitenId(null)
-    setBearbeitenBetrag('')
-    setBearbeitenArt('bar')
-    setBearbeitenStatus('gebucht')
-    setBearbeitenReferenz('')
-    setBearbeitenBemerkung('')
-  }
 
   async function zahlungSpeichern(e: React.FormEvent) {
     e.preventDefault()
-    if (!bearbeitenId) return
+    setFehler('')
+    setMeldung('')
 
-    const { error } = await supabase
-      .from('zahlungen')
-      .update({
-        betrag: bearbeitenBetrag ? Number(bearbeitenBetrag) : 0,
-        zahlungsart: bearbeitenArt,
-        status: bearbeitenStatus,
-        referenz: bearbeitenReferenz || null,
-        bemerkung: bearbeitenBemerkung || null,
-      })
-      .eq('id', bearbeitenId)
-
-    if (error) {
-      setFehler(error.message)
+    if (!rechnungId) {
+      setFehler('Bitte eine Rechnung auswählen.')
       return
     }
 
-    bearbeitenAbbrechen()
-    ladeZahlungen()
-    ladeRechnungen()
+    const rechnung = rechnungen.find((r) => r.id === rechnungId)
+    if (!rechnung) {
+      setFehler('Rechnung nicht gefunden.')
+      return
+    }
+
+    const zahlungsbetrag = Number(betrag || 0)
+
+    const insertRes = await supabase.from('zahlungen').insert({
+      rechnung_id: rechnungId,
+      zahlungsdatum,
+      betrag: zahlungsbetrag,
+      status,
+      zahlungsart,
+      notiz: notiz || null,
+    })
+
+    if (insertRes.error) {
+      setFehler(insertRes.error.message)
+      return
+    }
+
+    let neuerOffenerBetrag = Number(rechnung.offener_betrag || 0)
+
+    if (status === 'bezahlt' || status === 'teilbezahlt') {
+      neuerOffenerBetrag = Math.max(0, neuerOffenerBetrag - zahlungsbetrag)
+    }
+
+    let neuerStatus = rechnung.status || 'offen'
+    let neuerForderungsstatus = rechnung.forderungsstatus || 'offen'
+
+    if (status === 'storniert') {
+      neuerStatus = 'offen'
+      neuerForderungsstatus = 'offen'
+    } else if (neuerOffenerBetrag <= 0) {
+      neuerStatus = 'bezahlt'
+      neuerForderungsstatus = 'bezahlt'
+    } else if (zahlungsbetrag > 0) {
+      neuerStatus = 'teilbezahlt'
+      neuerForderungsstatus = 'offen'
+    } else if (status === 'offen') {
+      neuerStatus = 'offen'
+      neuerForderungsstatus = 'offen'
+    }
+
+    const updateRes = await supabase
+      .from('rechnungen')
+      .update({
+        offener_betrag: neuerOffenerBetrag,
+        status: neuerStatus,
+        forderungsstatus: neuerForderungsstatus,
+      })
+      .eq('id', rechnungId)
+
+    if (updateRes.error) {
+      setFehler(updateRes.error.message)
+      return
+    }
+
+    setRechnungId('')
+    setZahlungsdatum(new Date().toISOString().slice(0, 10))
+    setBetrag('')
+    setStatus('bezahlt')
+    setZahlungsart('bar')
+    setNotiz('')
+    setMeldung('Zahlung wurde gespeichert.')
+    laden()
   }
 
-  async function zahlungStornieren(zahlung: Zahlung) {
-    const bestaetigt = window.confirm('Zahlung wirklich stornieren?')
-    if (!bestaetigt) return
-    if (zahlung.storniert) return
+  async function mahnlogikJetztPruefen() {
+    setFehler('')
+    setMeldung('')
 
-    const { error: updateError } = await supabase
-      .from('zahlungen')
-      .update({
-        storniert: true,
-        status: 'storniert',
-      })
-      .eq('id', zahlung.id)
+    const heute = new Date()
 
-    if (updateError) {
-      setFehler(updateError.message)
-      return
-    }
+    for (const rechnung of rechnungen) {
+      const offen = Number(rechnung.offener_betrag || 0) > 0
+      if (!offen) continue
+      if (!rechnung.faellig_am) continue
 
-    if (zahlung.rechnung_id) {
-      const { data: rechnung } = await supabase
-        .from('rechnungen')
-        .select('*')
-        .eq('id', zahlung.rechnung_id)
-        .single()
+      const faellig = new Date(rechnung.faellig_am)
+      if (faellig.getTime() > heute.getTime()) continue
 
-      if (rechnung) {
-        const brutto = Number(rechnung.brutto_summe || 0)
-        const neuerOffenerBetrag = Math.min(
-          Number(rechnung.offener_betrag || 0) + Number(zahlung.betrag || 0),
-          brutto
-        )
-        const neuerStatus = berechneRechnungsstatus(brutto, neuerOffenerBetrag)
+      const letzteMahnung = rechnung.letzte_mahnung_am
+        ? new Date(rechnung.letzte_mahnung_am)
+        : null
+
+      let neueStufe = Number(rechnung.mahnstufe || 0)
+      const tageSeitLetzterMahnung = letzteMahnung
+        ? Math.floor((heute.getTime() - letzteMahnung.getTime()) / (1000 * 60 * 60 * 24))
+        : 999
+
+      if (!letzteMahnung || tageSeitLetzterMahnung >= 7) {
+        neueStufe += 1
+
+        let neuerForderungsstatus = 'zahlungserinnerung'
+        if (neueStufe === 1) neuerForderungsstatus = 'mahnung_1'
+        if (neueStufe === 2) neuerForderungsstatus = 'mahnung_2'
+        if (neueStufe >= 3) neuerForderungsstatus = 'mahnung_3'
+
+        await supabase.from('mahnungen').insert({
+          rechnung_id: rechnung.id,
+          mahnstufe: neueStufe,
+          betreff: `Automatische Mahnung Stufe ${neueStufe}`,
+          text: `Automatisch erzeugte Mahnung für Rechnung ${rechnung.rechnungsnummer || rechnung.id}.`,
+          status: 'erstellt',
+          notiz: 'Automatisch durch Zahlungsprüfung gesetzt',
+        })
 
         await supabase
           .from('rechnungen')
           .update({
-            offener_betrag: neuerOffenerBetrag,
-            status: neuerStatus,
+            mahnstufe: neueStufe,
+            letzte_mahnung_am: heute.toISOString(),
+            status: 'ueberfaellig',
+            forderungsstatus: neuerForderungsstatus,
           })
-          .eq('id', zahlung.rechnung_id)
+          .eq('id', rechnung.id)
       }
     }
 
-    ladeZahlungen()
-    ladeRechnungen()
+    setMeldung('Automatische Mahnlogik wurde ausgeführt.')
+    laden()
   }
 
-  async function zahlungLoeschen(id: string) {
-    const bestaetigt = window.confirm('Zahlung wirklich löschen?')
-    if (!bestaetigt) return
+  const aktiveRechnungen = useMemo(() => {
+    return rechnungen.filter((r) => Number(r.offener_betrag || 0) > 0)
+  }, [rechnungen])
 
-    const { error } = await supabase.from('zahlungen').delete().eq('id', id)
+  const sichtbareZahlungen = useMemo(() => {
+    return zahlungen.filter((z) => {
+      const rechnung = rechnungen.find((r) => r.id === z.rechnung_id)
+      if (!rechnung) return true
+      return Number(rechnung.offener_betrag || 0) > 0
+    })
+  }, [zahlungen, rechnungen])
 
-    if (error) {
-      setFehler(error.message)
-      return
+  const statistik = useMemo(() => {
+    const gesamtZahlungen = zahlungen.reduce((sum, z) => sum + Number(z.betrag || 0), 0)
+    const gesamtOffen = rechnungen.reduce((sum, r) => sum + Number(r.offener_betrag || 0), 0)
+    const bezahlteRechnungen = rechnungen.filter(
+      (r) => String(r.status || '').toLowerCase() === 'bezahlt'
+    ).length
+
+    return {
+      gesamtZahlungen,
+      gesamtOffen,
+      bezahlteRechnungen,
     }
-
-    if (bearbeitenId === id) {
-      bearbeitenAbbrechen()
-    }
-
-    ladeZahlungen()
-    ladeRechnungen()
-  }
+  }, [zahlungen, rechnungen])
 
   return (
-    <div className="page-card">
-      <h1>Zahlungen</h1>
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div className="topbar">
+        <div>
+          <h1 className="topbar-title">Zahlungen</h1>
+          <div className="topbar-subtitle">
+            Vollständig bezahlte Vorgänge verschwinden aus der Standardliste, bleiben aber für Historie und Statistik erhalten.
+          </div>
+        </div>
+      </div>
 
-      <form onSubmit={zahlungAnlegen} style={{ marginBottom: 24 }}>
+      <div className="kpi-strip">
+        <div className="kpi-pill">
+          Gesamtzahlungen
+          <strong>{statistik.gesamtZahlungen.toFixed(2)} €</strong>
+        </div>
+        <div className="kpi-pill">
+          Offen gesamt
+          <strong>{statistik.gesamtOffen.toFixed(2)} €</strong>
+        </div>
+        <div className="kpi-pill">
+          Bezahlte Rechnungen
+          <strong>{statistik.bezahlteRechnungen}</strong>
+        </div>
+      </div>
+
+      <form onSubmit={zahlungSpeichern} className="page-card">
+        <h2 style={{ marginTop: 0 }}>Zahlung erfassen</h2>
+
         <div className="form-row">
-          <select
-            value={zahlungRechnungId}
-            onChange={(e) => setZahlungRechnungId(e.target.value)}
-            style={{ minWidth: 260 }}
-          >
+          <select value={rechnungId} onChange={(e) => setRechnungId(e.target.value)}>
             <option value="">Rechnung auswählen</option>
-            {rechnungen.map((rechnung) => {
-              const kunde = kunden.find((k) => k.id === rechnung.kunde_id)
-              return (
-                <option key={rechnung.id} value={rechnung.id}>
-                  {(rechnung.rechnungsnummer || 'Rechnung')} – {(kunde?.firmenname || `${kunde?.vorname || ''} ${kunde?.nachname || ''}`.trim() || 'Kunde')} – offen {rechnung.offener_betrag ?? 0} €
-                </option>
-              )
-            })}
+            {aktiveRechnungen.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.rechnungsnummer || r.id} – offen {Number(r.offener_betrag || 0).toFixed(2)} €
+              </option>
+            ))}
           </select>
 
-          <input placeholder="Betrag" value={zahlungBetrag} onChange={(e) => setZahlungBetrag(e.target.value)} />
-          <select value={zahlungArt} onChange={(e) => setZahlungArt(e.target.value)}>
-            <option value="bar">bar</option>
-            <option value="ec_karte">ec_karte</option>
-            <option value="kreditkarte">kreditkarte</option>
-            <option value="ueberweisung">ueberweisung</option>
-            <option value="paypal">paypal</option>
-            <option value="sonstige">sonstige</option>
-          </select>
-          <select value={zahlungStatus} onChange={(e) => setZahlungStatus(e.target.value)}>
-            <option value="gebucht">gebucht</option>
-            <option value="vorgemerkt">vorgemerkt</option>
-            <option value="fehlgeschlagen">fehlgeschlagen</option>
+          <input
+            type="date"
+            value={zahlungsdatum}
+            onChange={(e) => setZahlungsdatum(e.target.value)}
+          />
+
+          <input
+            placeholder="Betrag"
+            value={betrag}
+            onChange={(e) => setBetrag(e.target.value)}
+          />
+        </div>
+
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as (typeof ZAHLUNGSSTATUS)[number])}
+          >
+            <option value="offen">offen</option>
+            <option value="teilbezahlt">teilbezahlt</option>
+            <option value="bezahlt">bezahlt</option>
             <option value="storniert">storniert</option>
-            <option value="rueckerstattet">rueckerstattet</option>
           </select>
-          <input placeholder="Referenz" value={zahlungReferenz} onChange={(e) => setZahlungReferenz(e.target.value)} />
+
+          <select value={zahlungsart} onChange={(e) => setZahlungsart(e.target.value)}>
+            <option value="bar">bar</option>
+            <option value="ueberweisung">überweisung</option>
+            <option value="karte">karte</option>
+            <option value="sonstiges">sonstiges</option>
+          </select>
         </div>
 
         <div style={{ marginTop: 12 }}>
           <textarea
-            placeholder="Bemerkung"
-            value={zahlungBemerkung}
-            onChange={(e) => setZahlungBemerkung(e.target.value)}
-            style={{ width: '100%', minHeight: 90 }}
+            placeholder="Notiz"
+            value={notiz}
+            onChange={(e) => setNotiz(e.target.value)}
+            style={{ width: '100%', minHeight: 80 }}
           />
         </div>
 
-        <div style={{ marginTop: 12 }}>
-          <button type="submit">Zahlung anlegen</button>
+        <div className="action-row">
+          <button type="submit">Zahlung speichern</button>
+          <button type="button" onClick={mahnlogikJetztPruefen}>
+            Mahnlogik ausführen
+          </button>
         </div>
       </form>
 
-      {bearbeitenId && (
-        <form onSubmit={zahlungSpeichern} className="list-box" style={{ marginBottom: 20 }}>
-          <h3 style={{ marginTop: 0 }}>Zahlung bearbeiten</h3>
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Aktive offene Rechnungen</h2>
 
-          <div className="form-row">
-            <input placeholder="Betrag" value={bearbeitenBetrag} onChange={(e) => setBearbeitenBetrag(e.target.value)} />
-            <select value={bearbeitenArt} onChange={(e) => setBearbeitenArt(e.target.value)}>
-              <option value="bar">bar</option>
-              <option value="ec_karte">ec_karte</option>
-              <option value="kreditkarte">kreditkarte</option>
-              <option value="ueberweisung">ueberweisung</option>
-              <option value="paypal">paypal</option>
-              <option value="sonstige">sonstige</option>
-            </select>
-            <select value={bearbeitenStatus} onChange={(e) => setBearbeitenStatus(e.target.value)}>
-              <option value="gebucht">gebucht</option>
-              <option value="vorgemerkt">vorgemerkt</option>
-              <option value="fehlgeschlagen">fehlgeschlagen</option>
-              <option value="storniert">storniert</option>
-              <option value="rueckerstattet">rueckerstattet</option>
-            </select>
-            <input placeholder="Referenz" value={bearbeitenReferenz} onChange={(e) => setBearbeitenReferenz(e.target.value)} />
+        {aktiveRechnungen.map((r) => (
+          <div key={r.id} className="list-box">
+            <strong>{r.rechnungsnummer || r.id}</strong>
+            <br />
+            Offen: {Number(r.offener_betrag || 0).toFixed(2)} €
+            <br />
+            Fällig am: {r.faellig_am || '-'}
+            <br />
+            Mahnstufe: {r.mahnstufe || 0}
+            <br />
+            <StatusBadge status={r.status || 'offen'} />
           </div>
+        ))}
 
-          <div style={{ marginTop: 12 }}>
-            <textarea
-              placeholder="Bemerkung"
-              value={bearbeitenBemerkung}
-              onChange={(e) => setBearbeitenBemerkung(e.target.value)}
-              style={{ width: '100%', minHeight: 90 }}
-            />
-          </div>
-
-          <div className="form-row" style={{ marginTop: 12 }}>
-            <button type="submit">Speichern</button>
-            <button type="button" onClick={bearbeitenAbbrechen} style={{ background: '#6b7280' }}>
-              Abbrechen
-            </button>
-          </div>
-        </form>
-      )}
-
-      <div>
-        {zahlungen.map((zahlung) => {
-          const rechnung = rechnungen.find((r) => r.id === zahlung.rechnung_id)
-          const kunde = kunden.find((k) => k.id === rechnung?.kunde_id)
-
-          return (
-            <div key={zahlung.id} className="list-box">
-              <strong>
-                {kunde
-                  ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
-                  : 'Unbekannter Kunde'}
-              </strong>
-              <br />
-              Rechnung: {rechnung?.rechnungsnummer || rechnung?.id || '-'}
-              <br />
-              Betrag: {zahlung.betrag ?? 0} €
-              <br />
-              Zahlungsart: {zahlung.zahlungsart || '-'}
-              <br />
-              Status: {zahlung.status || '-'}
-              <br />
-              Storniert: {zahlung.storniert ? 'ja' : 'nein'}
-              <br />
-              Zahlungsdatum: {zahlung.zahlungsdatum || '-'}
-              <br />
-              Referenz: {zahlung.referenz || '-'}
-              <br />
-              Bemerkung: {zahlung.bemerkung || '-'}
-
-              <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button type="button" onClick={() => bearbeitenStarten(zahlung)}>
-                  Bearbeiten
-                </button>
-                <button type="button" onClick={() => zahlungStornieren(zahlung)}>
-                  Stornieren
-                </button>
-                <button type="button" onClick={() => zahlungLoeschen(zahlung.id)} style={{ background: '#dc2626' }}>
-                  Löschen
-                </button>
-              </div>
-            </div>
-          )
-        })}
+        {aktiveRechnungen.length === 0 && (
+          <div className="muted">Keine aktiven offenen Rechnungen vorhanden.</div>
+        )}
       </div>
 
-      {fehler && <div className="error-box">Fehler: {fehler}</div>}
-    </div>
-  )
-}
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Aktive Zahlungen</h2>
 
-export default function ZahlungenPage() {
-  return (
-    <RoleGuard allowedRoles={['Admin', 'Buchhaltung']}>
-      <ZahlungenPageContent />
-    </RoleGuard>
+        {sichtbareZahlungen.map((z) => (
+          <div key={z.id} className="list-box">
+            <strong>{z.rechnung_id || '-'}</strong>
+            <br />
+            Datum: {z.zahlungsdatum || '-'}
+            <br />
+            Betrag: {Number(z.betrag || 0).toFixed(2)} €
+            <br />
+            Art: {z.zahlungsart || '-'}
+            <br />
+            Notiz: {z.notiz || '-'}
+            <br />
+            <div style={{ marginTop: 8 }}>
+              <StatusBadge status={z.status || 'offen'} />
+            </div>
+          </div>
+        ))}
+
+        {sichtbareZahlungen.length === 0 && (
+          <div className="muted">Keine aktiven Zahlungen vorhanden.</div>
+        )}
+      </div>
+
+      {meldung && <div className="badge badge-success">{meldung}</div>}
+      {fehler && <div className="error-box">{fehler}</div>}
+    </div>
   )
 }
