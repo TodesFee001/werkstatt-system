@@ -258,13 +258,15 @@ const sections: WikiSection[] = [
 ]
 
 const workflows = [
-  {
+ {
   title: 'Ablauf mit Termin',
   steps: [
     'Kunden suchen oder neu anlegen.',
     'Fahrzeug suchen oder neu anlegen.',
     'Termin mit Startzeit, Endzeit, Mitarbeiter und Arbeitsplatz erstellen.',
     'Serviceauftrag erstellen und mit Kunde/Fahrzeug verbinden.',
+    '— Auftrag wird vorbereitet und wartet auf Terminbeginn —',
+    'Fortsetzen bei Terminbeginn:',
     'Fahrzeugannahme im Serviceauftrag dokumentieren.',
     'Arbeitszeit und Material während der Bearbeitung eintragen.',
     'Status des Auftrags aktuell halten.',
