@@ -265,7 +265,7 @@ const workflows = [
       'Fahrzeug suchen oder neu anlegen.',
       'Termin mit Startzeit, Endzeit, Mitarbeiter und Arbeitsplatz erstellen.',
       'Serviceauftrag erstellen und mit Kunde/Fahrzeug verbinden.',
-      '( Fortsetzen wenn Termin fällig )'
+      'Fortsetzen wenn Termin fällig'
       'Fahrzeugannahme im Serviceauftrag dokumentieren.',
       'Arbeitszeit und Material während der Bearbeitung eintragen.',
       'Status des Auftrags aktuell halten.',
