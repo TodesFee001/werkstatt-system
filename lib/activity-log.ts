@@ -1,11 +1,21 @@
-import { supabase } from './supabase'
+import { supabase } from '@/lib/supabase'
+
+export type LogAktion =
+  | 'erstellt'
+  | 'bearbeitet'
+  | 'geloescht'
+  | 'hochgeladen'
+  | 'notiz_erstellt'
+  | 'notiz_bearbeitet'
+  | 'notiz_geloescht'
+  | 'status_geaendert'
 
 export async function logAktion(
   tabelle: string,
-  aktion: 'erstellt' | 'bearbeitet' | 'geloescht',
+  aktion: LogAktion,
   datensatzId: string | null,
   titel: string,
-  details: any = {}
+  details: Record<string, unknown> = {}
 ) {
   try {
     const {
@@ -15,7 +25,7 @@ export async function logAktion(
     await supabase.from('aktivitaetslog').insert({
       benutzer_id: user?.id || null,
       benutzer_name: user?.email || 'System',
-      rolle: 'unknown', // optional später erweitern
+      rolle: 'unknown',
       aktion,
       tabelle,
       datensatz_id: datensatzId,
