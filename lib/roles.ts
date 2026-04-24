@@ -1,5 +1,6 @@
 export type AppRole =
   | 'Admin'
+  | 'Werkstattmeister'
   | 'Werkstatt'
   | 'Serviceannahme'
   | 'Buchhaltung'
@@ -12,11 +13,6 @@ export function hatRolle(
   erlaubteRollen: AppRole[]
 ) {
   if (!aktuelleRolle) return false
-
-  if (aktuelleRolle === 'Behördenvertreter') {
-    return true
-  }
-
   return erlaubteRollen.includes(aktuelleRolle as AppRole)
 }
 
@@ -24,10 +20,10 @@ export function istAdmin(rolle: string | null | undefined) {
   return rolle === 'Admin'
 }
 
-export function istBehoerdenvertreter(rolle: string | null | undefined) {
-  return rolle === 'Behördenvertreter'
+export function istWerkstattmeister(rolle: string | null | undefined) {
+  return rolle === 'Werkstattmeister'
 }
 
-export function istReadOnlyRolle(rolle: string | null | undefined) {
+export function istBehoerdenvertreter(rolle: string | null | undefined) {
   return rolle === 'Behördenvertreter'
 }
