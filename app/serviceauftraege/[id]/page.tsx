@@ -1,253 +1,194 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
+import AttachmentManager from '../../components/AttachmentManager'
+import RoleGuard from '../../components/RoleGuard'
+import StatusBadge from '../../components/StatusBadge'
 import { supabase } from '@/lib/supabase'
 
 type Serviceauftrag = {
   id: string
   kunde_id: string | null
   fahrzeug_id: string | null
-  status: string | null
+  mitarbeiter_id: string | null
   art: string | null
+  status: string | null
   fehlerbeschreibung: string | null
-  kilometerstand_bei_annahme: number | null
   interne_notiz: string | null
   freigabe_status: string | null
-  fertigstellungsdatum: string | null
-}
-
-type Kunde = {
-  id: string
-  vorname: string | null
-  nachname: string | null
-  firmenname: string | null
-}
-
-type Fahrzeug = {
-  id: string
-  kennzeichen: string | null
-  marke: string | null
-  modell: string | null
-}
-
-type Material = {
-  id: string
-  serviceauftrag_id: string
-  lagerartikel_id: string
-  menge: number
-  einzelpreis: number | null
-  gesamtpreis: number | null
-  notiz: string | null
-}
-
-type Arbeitszeit = {
-  id: string
-  serviceauftrag_id: string
-  mitarbeiter_id: string | null
-  datum: string
-  stunden: number
-  stundensatz: number | null
-  gesamtpreis: number | null
-  notiz: string | null
-}
-
-type Lagerartikel = {
-  id: string
-  name: string
-}
-
-type Mitarbeiter = {
-  id: string
-  vorname: string
-  nachname: string
-}
-
-type Termin = {
-  id: string
-  serviceauftrag_id: string
-  titel: string
-  startzeit: string
-  endzeit: string
-  status: string | null
-}
-
-type Anhang = {
-  id: string
-  bezug_typ: string
-  bezug_id: string
-  titel: string | null
-  dateiname: string
-  dateipfad: string
-  dateityp: string | null
-}
-
-type Fahrzeugcheck = {
-  id: string
-  serviceauftrag_id: string
-  kilometerstand: number | null
+  kilometerstand_bei_annahme: number | null
   tankstand: string | null
   aussencheck: string | null
   innencheck: string | null
   schaeden: string | null
   zubehoer: string | null
-  notiz: string | null
   kundenunterschrift: string | null
   mitarbeiterunterschrift: string | null
 }
 
-type Zusatzfreigabe = {
+type Kunde = { id: string; vorname: string | null; nachname: string | null; firmenname: string | null }
+type Fahrzeug = { id: string; kennzeichen: string | null; marke: string | null; modell: string | null }
+type Mitarbeiter = { id: string; vorname: string | null; nachname: string | null }
+
+type Arbeitszeit = {
   id: string
   serviceauftrag_id: string
-  titel: string
   beschreibung: string | null
-  betrag: number | null
-  status: string | null
-  kundenname: string | null
-  kundenunterschrift: string | null
-  freigegeben_am: string | null
+  stunden: number | null
+  stundensatz: number | null
 }
 
+type Material = {
+  id: string
+  serviceauftrag_id: string
+  lagerartikel_id: string | null
+  bezeichnung: string | null
+  menge: number | null
+  einzelpreis: number | null
+}
+
+const STATUS = ['offen', 'angenommen', 'in_arbeit', 'wartet', 'wartet_auf_freigabe', 'fertig', 'abgeschlossen', 'archiviert']
+
 export default function ServiceauftragDetailPage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Behördenvertreter']}>
+      <ServiceauftragDetailPageContent />
+    </RoleGuard>
+  )
+}
+
+function ServiceauftragDetailPageContent() {
   const params = useParams()
-  const id = params.id as string
+  const id = String(params.id)
 
   const [auftrag, setAuftrag] = useState<Serviceauftrag | null>(null)
   const [kunde, setKunde] = useState<Kunde | null>(null)
   const [fahrzeug, setFahrzeug] = useState<Fahrzeug | null>(null)
-  const [material, setMaterial] = useState<Material[]>([])
+  const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter | null>(null)
   const [arbeitszeiten, setArbeitszeiten] = useState<Arbeitszeit[]>([])
-  const [lagerartikel, setLagerartikel] = useState<Lagerartikel[]>([])
-  const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([])
-  const [termine, setTermine] = useState<Termin[]>([])
-  const [anhaenge, setAnhaenge] = useState<Anhang[]>([])
-  const [fahrzeugchecks, setFahrzeugchecks] = useState<Fahrzeugcheck[]>([])
-  const [zusatzfreigaben, setZusatzfreigaben] = useState<Zusatzfreigabe[]>([])
+  const [materialien, setMaterialien] = useState<Material[]>([])
 
-  const [anhangTitel, setAnhangTitel] = useState('')
-  const [anhangDatei, setAnhangDatei] = useState<File | null>(null)
+  const [status, setStatus] = useState('offen')
+  const [fehlerbeschreibung, setFehlerbeschreibung] = useState('')
+  const [interneNotiz, setInterneNotiz] = useState('')
+  const [kilometerstand, setKilometerstand] = useState('')
+  const [tankstand, setTankstand] = useState('voll')
+  const [aussencheck, setAussencheck] = useState('')
+  const [innencheck, setInnencheck] = useState('')
+  const [schaeden, setSchaeden] = useState('')
+  const [zubehoer, setZubehoer] = useState('')
+  const [kundenunterschrift, setKundenunterschrift] = useState('')
+  const [mitarbeiterunterschrift, setMitarbeiterunterschrift] = useState('')
 
-  const [fehler, setFehler] = useState('')
+  const [azBeschreibung, setAzBeschreibung] = useState('')
+  const [azStunden, setAzStunden] = useState('')
+  const [azSatz, setAzSatz] = useState('')
+
+  const [matBezeichnung, setMatBezeichnung] = useState('')
+  const [matMenge, setMatMenge] = useState('')
+  const [matPreis, setMatPreis] = useState('')
+
   const [meldung, setMeldung] = useState('')
+  const [fehler, setFehler] = useState('')
 
-  async function ladeAlles() {
-    const { data: auftragData, error: auftragError } = await supabase
-      .from('serviceauftraege')
-      .select('*')
-      .eq('id', id)
-      .single()
+  async function laden() {
+    const auftragRes = await supabase.from('serviceauftraege').select('*').eq('id', id).maybeSingle()
 
-    if (auftragError || !auftragData) {
-      setFehler(auftragError?.message || 'Serviceauftrag nicht gefunden')
+    if (auftragRes.error) {
+      setFehler(auftragRes.error.message)
       return
     }
 
-    setAuftrag(auftragData)
+    const a = (auftragRes.data as Serviceauftrag | null) || null
+    setAuftrag(a)
 
-    const [
-      kundeRes,
-      fahrzeugRes,
-      materialRes,
-      arbeitszeitRes,
-      lagerRes,
-      mitarbeiterRes,
-      termineRes,
-      anhaengeRes,
-      checksRes,
-      freigabenRes,
-    ] = await Promise.all([
-      auftragData.kunde_id
-        ? supabase.from('kunden').select('*').eq('id', auftragData.kunde_id).single()
-        : Promise.resolve({ data: null, error: null } as any),
-      auftragData.fahrzeug_id
-        ? supabase.from('fahrzeuge').select('*').eq('id', auftragData.fahrzeug_id).single()
-        : Promise.resolve({ data: null, error: null } as any),
-      supabase.from('serviceauftrag_material').select('*').eq('serviceauftrag_id', id),
+    if (a) {
+      setStatus(a.status || 'offen')
+      setFehlerbeschreibung(a.fehlerbeschreibung || '')
+      setInterneNotiz(a.interne_notiz || '')
+      setKilometerstand(a.kilometerstand_bei_annahme != null ? String(a.kilometerstand_bei_annahme) : '')
+      setTankstand(a.tankstand || 'voll')
+      setAussencheck(a.aussencheck || '')
+      setInnencheck(a.innencheck || '')
+      setSchaeden(a.schaeden || '')
+      setZubehoer(a.zubehoer || '')
+      setKundenunterschrift(a.kundenunterschrift || '')
+      setMitarbeiterunterschrift(a.mitarbeiterunterschrift || '')
+    }
+
+    if (a?.kunde_id) {
+      const res = await supabase.from('kunden').select('*').eq('id', a.kunde_id).maybeSingle()
+      if (!res.error) setKunde((res.data as Kunde | null) || null)
+    }
+
+    if (a?.fahrzeug_id) {
+      const res = await supabase.from('fahrzeuge').select('*').eq('id', a.fahrzeug_id).maybeSingle()
+      if (!res.error) setFahrzeug((res.data as Fahrzeug | null) || null)
+    }
+
+    if (a?.mitarbeiter_id) {
+      const res = await supabase.from('mitarbeiter').select('*').eq('id', a.mitarbeiter_id).maybeSingle()
+      if (!res.error) setMitarbeiter((res.data as Mitarbeiter | null) || null)
+    }
+
+    const [azRes, matRes] = await Promise.all([
       supabase.from('serviceauftrag_arbeitszeiten').select('*').eq('serviceauftrag_id', id),
-      supabase.from('lagerartikel').select('id, name'),
-      supabase.from('mitarbeiter').select('id, vorname, nachname'),
-      supabase.from('serviceauftrag_termine').select('*').eq('serviceauftrag_id', id),
-      supabase.from('anhaenge').select('*').eq('bezug_typ', 'serviceauftrag').eq('bezug_id', id),
-      supabase.from('fahrzeugchecks').select('*').eq('serviceauftrag_id', id).order('erstellt_am', { ascending: false }),
-      supabase.from('zusatzfreigaben').select('*').eq('serviceauftrag_id', id).order('erstellt_am', { ascending: false }),
+      supabase.from('serviceauftrag_material').select('*').eq('serviceauftrag_id', id),
     ])
 
-    const error =
-      kundeRes.error ||
-      fahrzeugRes.error ||
-      materialRes.error ||
-      arbeitszeitRes.error ||
-      lagerRes.error ||
-      mitarbeiterRes.error ||
-      termineRes.error ||
-      anhaengeRes.error ||
-      checksRes.error ||
-      freigabenRes.error
+    if (azRes.error || matRes.error) {
+      setFehler(azRes.error?.message || matRes.error?.message || '')
+      return
+    }
+
+    setArbeitszeiten((azRes.data || []) as Arbeitszeit[])
+    setMaterialien((matRes.data || []) as Material[])
+  }
+
+  useEffect(() => {
+    laden()
+  }, [id])
+
+  async function auftragSpeichern() {
+    setFehler('')
+    setMeldung('')
+
+    const { error } = await supabase
+      .from('serviceauftraege')
+      .update({
+        status,
+        fehlerbeschreibung: fehlerbeschreibung || null,
+        interne_notiz: interneNotiz || null,
+        kilometerstand_bei_annahme: kilometerstand ? Number(kilometerstand) : null,
+        tankstand,
+        aussencheck: aussencheck || null,
+        innencheck: innencheck || null,
+        schaeden: schaeden || null,
+        zubehoer: zubehoer || null,
+        kundenunterschrift: kundenunterschrift || null,
+        mitarbeiterunterschrift: mitarbeiterunterschrift || null,
+      })
+      .eq('id', id)
 
     if (error) {
       setFehler(error.message)
       return
     }
 
-    setKunde(kundeRes.data || null)
-    setFahrzeug(fahrzeugRes.data || null)
-    setMaterial(materialRes.data || [])
-    setArbeitszeiten(arbeitszeitRes.data || [])
-    setLagerartikel(lagerRes.data || [])
-    setMitarbeiter(mitarbeiterRes.data || [])
-    setTermine(termineRes.data || [])
-    setAnhaenge(anhaengeRes.data || [])
-    setFahrzeugchecks(checksRes.data || [])
-    setZusatzfreigaben(freigabenRes.data || [])
+    setMeldung('Serviceauftrag wurde gespeichert.')
+    laden()
   }
 
-  useEffect(() => {
-    ladeAlles()
-  }, [id])
-
-  function artikelName(lagerartikelId: string) {
-    return lagerartikel.find((a) => a.id === lagerartikelId)?.name || 'Unbekannter Artikel'
-  }
-
-  function mitarbeiterName(mitarbeiterId: string | null) {
-    if (!mitarbeiterId) return '-'
-    const person = mitarbeiter.find((m) => m.id === mitarbeiterId)
-    return person ? `${person.vorname} ${person.nachname}` : '-'
-  }
-
-  function dateiUrl(dateipfad: string) {
-    return supabase.storage.from('anhaenge').getPublicUrl(dateipfad).data.publicUrl
-  }
-
-  async function anhangHochladen(e: React.FormEvent) {
-    e.preventDefault()
+  async function arbeitszeitHinzufuegen() {
     setFehler('')
     setMeldung('')
 
-    if (!anhangDatei) {
-      setFehler('Bitte eine Datei auswählen.')
-      return
-    }
-
-    const dateiname = `${Date.now()}-${anhangDatei.name}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('anhaenge')
-      .upload(dateiname, anhangDatei)
-
-    if (uploadError) {
-      setFehler(uploadError.message)
-      return
-    }
-
-    const { error } = await supabase.from('anhaenge').insert({
-      bezug_typ: 'serviceauftrag',
-      bezug_id: id,
-      titel: anhangTitel || null,
-      dateiname: anhangDatei.name,
-      dateipfad: dateiname,
-      dateityp: anhangDatei.type || null,
+    const { error } = await supabase.from('serviceauftrag_arbeitszeiten').insert({
+      serviceauftrag_id: id,
+      beschreibung: azBeschreibung || null,
+      stunden: Number(azStunden || 0),
+      stundensatz: Number(azSatz || 0),
     })
 
     if (error) {
@@ -255,189 +196,240 @@ export default function ServiceauftragDetailPage() {
       return
     }
 
-    setAnhangTitel('')
-    setAnhangDatei(null)
-    setMeldung('Foto / Datei hochgeladen.')
-    ladeAlles()
+    setAzBeschreibung('')
+    setAzStunden('')
+    setAzSatz('')
+    setMeldung('Arbeitszeit wurde hinzugefügt.')
+    laden()
   }
 
-  const materialsumme = material.reduce((sum, m) => sum + Number(m.gesamtpreis || 0), 0)
-  const arbeitszeitsumme = arbeitszeiten.reduce((sum, z) => sum + Number(z.gesamtpreis || 0), 0)
+  async function arbeitszeitLoeschen(azId: string) {
+    const ok = window.confirm('Arbeitszeit wirklich löschen?')
+    if (!ok) return
+
+    const { error } = await supabase.from('serviceauftrag_arbeitszeiten').delete().eq('id', azId)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    setMeldung('Arbeitszeit wurde gelöscht.')
+    laden()
+  }
+
+  async function materialHinzufuegen() {
+    setFehler('')
+    setMeldung('')
+
+    const { error } = await supabase.from('serviceauftrag_material').insert({
+      serviceauftrag_id: id,
+      bezeichnung: matBezeichnung || null,
+      menge: Number(matMenge || 0),
+      einzelpreis: Number(matPreis || 0),
+    })
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    setMatBezeichnung('')
+    setMatMenge('')
+    setMatPreis('')
+    setMeldung('Material wurde hinzugefügt.')
+    laden()
+  }
+
+  async function materialLoeschen(matId: string) {
+    const ok = window.confirm('Material wirklich löschen?')
+    if (!ok) return
+
+    const { error } = await supabase.from('serviceauftrag_material').delete().eq('id', matId)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    setMeldung('Material wurde gelöscht.')
+    laden()
+  }
+
+  const arbeitskosten = useMemo(() => arbeitszeiten.reduce((s, a) => s + Number(a.stunden || 0) * Number(a.stundensatz || 0), 0), [arbeitszeiten])
+  const materialkosten = useMemo(() => materialien.reduce((s, m) => s + Number(m.menge || 0) * Number(m.einzelpreis || 0), 0), [materialien])
+  const gesamt = arbeitskosten + materialkosten
+
+  async function abschliessenUndRechnungErstellen() {
+    setFehler('')
+    setMeldung('')
+
+    if (!auftrag) return
+
+    const rechnungsnummer = `RE-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
+    const netto = gesamt
+    const brutto = Number((netto * 1.19).toFixed(2))
+
+    const { error: rError } = await supabase.from('rechnungen').insert({
+      serviceauftrag_id: id,
+      kunde_id: auftrag.kunde_id,
+      rechnungsnummer,
+      netto_summe: netto,
+      brutto_summe: brutto,
+      offener_betrag: brutto,
+      status: 'offen',
+      rechnungsdatum: new Date().toISOString().slice(0, 10),
+      faellig_am: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    })
+
+    if (rError) {
+      setFehler(rError.message)
+      return
+    }
+
+    const { error: sError } = await supabase.from('serviceauftraege').update({ status: 'abgeschlossen' }).eq('id', id)
+
+    if (sError) {
+      setFehler(sError.message)
+      return
+    }
+
+    setMeldung('Auftrag wurde abgeschlossen und Rechnung wurde erstellt.')
+    laden()
+  }
 
   return (
-    <div className="page-card">
-      <h1>Serviceauftragdetail</h1>
-
-      {auftrag && (
-        <div className="list-box">
-          <strong>{auftrag.art || '-'}</strong>
-          <br />
-          Status: {auftrag.status || '-'}
-          <br />
-          Freigabe: {auftrag.freigabe_status || '-'}
-          <br />
-          Fehlerbeschreibung: {auftrag.fehlerbeschreibung || '-'}
-          <br />
-          Interne Notiz: {auftrag.interne_notiz || '-'}
-          <br />
-          Kilometerstand: {auftrag.kilometerstand_bei_annahme ?? '-'}
-          <br />
-          Fertigstellung: {auftrag.fertigstellungsdatum || '-'}
-          <br />
-          Kunde:{' '}
-          {kunde
-            ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
-            : '-'}
-          <br />
-          Fahrzeug:{' '}
-          {fahrzeug
-            ? `${fahrzeug.kennzeichen || '-'} – ${fahrzeug.marke || '-'} ${fahrzeug.modell || '-'}`
-            : '-'}
-          <br />
-          {kunde && <Link href={`/kunden/${kunde.id}`}>Zur Kundendetailseite</Link>}
-          <br />
-          {fahrzeug && <Link href={`/fahrzeuge/${fahrzeug.id}`}>Zur Fahrzeugdetailseite</Link>}
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div className="topbar">
+        <div>
+          <h1 className="topbar-title">Serviceauftrag bearbeiten</h1>
+          <div className="topbar-subtitle">Arbeitszeit, Material, Annahme/Fahrzeugcheck und Rechnungserstellung.</div>
         </div>
-      )}
-
-      <h2>Fahrzeugcheck / Annahme</h2>
-      {fahrzeugchecks.length === 0 ? (
-        <div className="list-box">Kein Fahrzeugcheck vorhanden.</div>
-      ) : (
-        fahrzeugchecks.map((c) => (
-          <div key={c.id} className="list-box">
-            Kilometerstand: {c.kilometerstand ?? '-'}
-            <br />
-            Tankstand: {c.tankstand || '-'}
-            <br />
-            Außencheck: {c.aussencheck || '-'}
-            <br />
-            Innencheck: {c.innencheck || '-'}
-            <br />
-            Schäden: {c.schaeden || '-'}
-            <br />
-            Zubehör: {c.zubehoer || '-'}
-            <br />
-            Notiz: {c.notiz || '-'}
-            <br />
-            Kundenunterschrift: {c.kundenunterschrift || '-'}
-            <br />
-            Mitarbeiterunterschrift: {c.mitarbeiterunterschrift || '-'}
-          </div>
-        ))
-      )}
-
-      <h2>Zusatzfreigaben</h2>
-      {zusatzfreigaben.length === 0 ? (
-        <div className="list-box">Keine Zusatzfreigaben vorhanden.</div>
-      ) : (
-        zusatzfreigaben.map((f) => (
-          <div key={f.id} className="list-box">
-            <strong>{f.titel}</strong>
-            <br />
-            Beschreibung: {f.beschreibung || '-'}
-            <br />
-            Betrag: {Number(f.betrag || 0).toFixed(2)} €
-            <br />
-            Status: {f.status || '-'}
-            <br />
-            Kunde: {f.kundenname || '-'}
-            <br />
-            Unterschrift: {f.kundenunterschrift || '-'}
-            <br />
-            Freigegeben am: {f.freigegeben_am ? new Date(f.freigegeben_am).toLocaleString('de-DE') : '-'}
-          </div>
-        ))
-      )}
-
-      <h2>Material</h2>
-      {material.map((m) => (
-        <div key={m.id} className="list-box">
-          <strong>{artikelName(m.lagerartikel_id)}</strong>
-          <br />
-          Menge: {m.menge}
-          <br />
-          Einzelpreis: {Number(m.einzelpreis || 0).toFixed(2)} €
-          <br />
-          Gesamt: {Number(m.gesamtpreis || 0).toFixed(2)} €
-          <br />
-          Notiz: {m.notiz || '-'}
-        </div>
-      ))}
-      <div className="list-box">
-        <strong>Materialsumme</strong>
-        <br />
-        {materialsumme.toFixed(2)} €
       </div>
 
-      <h2>Arbeitszeiten</h2>
-      {arbeitszeiten.map((z) => (
-        <div key={z.id} className="list-box">
-          <strong>{z.datum}</strong>
-          <br />
-          Mitarbeiter: {mitarbeiterName(z.mitarbeiter_id)}
-          <br />
-          Stunden: {z.stunden}
-          <br />
-          Stundensatz: {Number(z.stundensatz || 0).toFixed(2)} €
-          <br />
-          Gesamt: {Number(z.gesamtpreis || 0).toFixed(2)} €
-          <br />
-          Notiz: {z.notiz || '-'}
-        </div>
-      ))}
-      <div className="list-box">
-        <strong>Arbeitssumme</strong>
-        <br />
-        {arbeitszeitsumme.toFixed(2)} €
-      </div>
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Auftragsdaten</h2>
+        {auftrag && (
+          <div className="list-box">
+            <strong>{auftrag.art || '-'}</strong>
+            <br />
+            Kunde: {kunde ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim() : '-'}
+            <br />
+            Fahrzeug: {fahrzeug ? `${fahrzeug.kennzeichen || '-'} – ${fahrzeug.marke || '-'} ${fahrzeug.modell || '-'}` : '-'}
+            <br />
+            Mitarbeiter: {mitarbeiter ? `${mitarbeiter.vorname || ''} ${mitarbeiter.nachname || ''}`.trim() : '-'}
+            <br />
+            Aktueller Status: <StatusBadge status={auftrag.status || 'offen'} />
+          </div>
+        )}
 
-      <h2>Termine</h2>
-      {termine.map((t) => (
-        <div key={t.id} className="list-box">
-          <strong>{t.titel}</strong>
-          <br />
-          Start: {new Date(t.startzeit).toLocaleString('de-DE')}
-          <br />
-          Ende: {new Date(t.endzeit).toLocaleString('de-DE')}
-          <br />
-          Status: {t.status || '-'}
-        </div>
-      ))}
-
-      <h2>Fotos / Anhänge</h2>
-
-      <form onSubmit={anhangHochladen} className="list-box" style={{ marginBottom: 20 }}>
         <div className="form-row">
-          <input
-            placeholder="Titel"
-            value={anhangTitel}
-            onChange={(e) => setAnhangTitel(e.target.value)}
-          />
-          <input type="file" onChange={(e) => setAnhangDatei(e.target.files?.[0] || null)} />
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <input placeholder="Kilometerstand bei Annahme" value={kilometerstand} onChange={(e) => setKilometerstand(e.target.value)} />
+          <select value={tankstand} onChange={(e) => setTankstand(e.target.value)}>
+            <option value="leer">Tankfüllung: leer</option>
+            <option value="1/4">Tankfüllung: 1/4</option>
+            <option value="1/2">Tankfüllung: 1/2</option>
+            <option value="3/4">Tankfüllung: 3/4</option>
+            <option value="voll">Tankfüllung: voll</option>
+          </select>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <textarea placeholder="Fehlerbeschreibung" value={fehlerbeschreibung} onChange={(e) => setFehlerbeschreibung(e.target.value)} />
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <textarea placeholder="Außencheck" value={aussencheck} onChange={(e) => setAussencheck(e.target.value)} />
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <textarea placeholder="Innencheck" value={innencheck} onChange={(e) => setInnencheck(e.target.value)} />
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <textarea placeholder="Schäden" value={schaeden} onChange={(e) => setSchaeden(e.target.value)} />
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <textarea placeholder="Zubehör" value={zubehoer} onChange={(e) => setZubehoer(e.target.value)} />
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <textarea placeholder="Interne Notiz" value={interneNotiz} onChange={(e) => setInterneNotiz(e.target.value)} />
+        </div>
+
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <input placeholder="Kundenunterschrift" value={kundenunterschrift} onChange={(e) => setKundenunterschrift(e.target.value)} />
+          <input placeholder="Mitarbeiterunterschrift" value={mitarbeiterunterschrift} onChange={(e) => setMitarbeiterunterschrift(e.target.value)} />
         </div>
 
         <div className="action-row">
-          <button type="submit">Foto / Datei hochladen</button>
+          <button type="button" onClick={auftragSpeichern}>Auftrag speichern</button>
+          <button type="button" onClick={abschliessenUndRechnungErstellen} style={{ background: '#16a34a' }}>
+            Auftrag abschließen und Rechnung erstellen
+          </button>
         </div>
-      </form>
+      </div>
 
-      {anhaenge.length === 0 ? (
-        <div className="list-box">Keine Anhänge vorhanden.</div>
-      ) : (
-        anhaenge.map((a) => (
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Arbeitszeit hinzufügen</h2>
+        <div className="form-row">
+          <input placeholder="Beschreibung" value={azBeschreibung} onChange={(e) => setAzBeschreibung(e.target.value)} />
+          <input placeholder="Stunden" value={azStunden} onChange={(e) => setAzStunden(e.target.value)} />
+          <input placeholder="Stundensatz" value={azSatz} onChange={(e) => setAzSatz(e.target.value)} />
+        </div>
+        <div className="action-row">
+          <button type="button" onClick={arbeitszeitHinzufuegen}>Arbeitszeit hinzufügen</button>
+        </div>
+
+        {arbeitszeiten.map((a) => (
           <div key={a.id} className="list-box">
-            <a href={dateiUrl(a.dateipfad)} target="_blank" rel="noreferrer">
-              {a.titel || a.dateiname}
-            </a>
+            <strong>{a.beschreibung || '-'}</strong>
             <br />
-            Typ: {a.dateityp || '-'}
+            {Number(a.stunden || 0).toFixed(2)} Std. × {Number(a.stundensatz || 0).toFixed(2)} €
+            <br />
+            Summe: {(Number(a.stunden || 0) * Number(a.stundensatz || 0)).toFixed(2)} €
+            <div className="action-row">
+              <button type="button" onClick={() => arbeitszeitLoeschen(a.id)} style={{ background: '#dc2626' }}>Löschen</button>
+            </div>
           </div>
-        ))
-      )}
+        ))}
+      </div>
+
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Material hinzufügen</h2>
+        <div className="form-row">
+          <input placeholder="Bezeichnung" value={matBezeichnung} onChange={(e) => setMatBezeichnung(e.target.value)} />
+          <input placeholder="Menge" value={matMenge} onChange={(e) => setMatMenge(e.target.value)} />
+          <input placeholder="Einzelpreis" value={matPreis} onChange={(e) => setMatPreis(e.target.value)} />
+        </div>
+        <div className="action-row">
+          <button type="button" onClick={materialHinzufuegen}>Material hinzufügen</button>
+        </div>
+
+        {materialien.map((m) => (
+          <div key={m.id} className="list-box">
+            <strong>{m.bezeichnung || '-'}</strong>
+            <br />
+            {Number(m.menge || 0).toFixed(2)} × {Number(m.einzelpreis || 0).toFixed(2)} €
+            <br />
+            Summe: {(Number(m.menge || 0) * Number(m.einzelpreis || 0)).toFixed(2)} €
+            <div className="action-row">
+              <button type="button" onClick={() => materialLoeschen(m.id)} style={{ background: '#dc2626' }}>Löschen</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="kpi-strip">
+        <div className="kpi-pill">Arbeitskosten<strong>{arbeitskosten.toFixed(2)} €</strong></div>
+        <div className="kpi-pill">Materialkosten<strong>{materialkosten.toFixed(2)} €</strong></div>
+        <div className="kpi-pill">Netto Gesamt<strong>{gesamt.toFixed(2)} €</strong></div>
+        <div className="kpi-pill">Brutto 19%<strong>{(gesamt * 1.19).toFixed(2)} €</strong></div>
+      </div>
+
+      <AttachmentManager bereich="serviceauftrag" datensatzId={id} titel={auftrag ? auftrag.art || auftrag.id : 'Serviceauftrag'} />
 
       {meldung && <div className="badge badge-success">{meldung}</div>}
-      {fehler && <div className="error-box">Fehler: {fehler}</div>}
+      {fehler && <div className="error-box">{fehler}</div>}
     </div>
   )
 }

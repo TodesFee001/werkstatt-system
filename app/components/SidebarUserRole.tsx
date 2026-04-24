@@ -1,104 +1,50 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
+type Benutzerprofil = {
+  id: string
+  rolle: string | null
+  aktiv: boolean | null
+  benutzername: string | null
+}
+
 export default function SidebarUserRole() {
-  const router = useRouter()
-
-  const [rolle, setRolle] = useState('Lade...')
-  const [benutzername, setBenutzername] = useState('')
-  const [fehler, setFehler] = useState('')
-
-  async function ladeProfil() {
-    setFehler('')
-
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession()
-
-    if (sessionError) {
-      setRolle('Unbekannt')
-      setFehler(sessionError.message)
-      return
-    }
-
-    const user = session?.user
-
-    if (!user) {
-      setRolle('Nicht eingeloggt')
-      setBenutzername('')
-      return
-    }
-
-    const { data, error } = await supabase
-      .from('benutzerprofile')
-      .select('rolle, aktiv, benutzername')
-      .eq('id', user.id)
-      .single()
-
-    if (error || !data) {
-      setRolle('Unbekannt')
-      setFehler(error?.message || 'Kein Benutzerprofil gefunden')
-      return
-    }
-
-    if (!data.aktiv) {
-      setRolle('Deaktiviert')
-      setBenutzername(data.benutzername || '')
-      return
-    }
-
-    setRolle(data.rolle || 'Unbekannt')
-    setBenutzername(data.benutzername || '')
-  }
-
-  async function logout() {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
+  const [profil, setProfil] = useState<Benutzerprofil | null>(null)
 
   useEffect(() => {
-    ladeProfil()
+    async function laden() {
+      const sessionRes = await supabase.auth.getSession()
+      const userId = sessionRes.data.session?.user?.id
+
+      if (!userId) {
+        setProfil(null)
+        return
+      }
+
+      const { data } = await supabase
+        .from('benutzerprofile')
+        .select('id, rolle, aktiv, benutzername')
+        .eq('id', userId)
+        .maybeSingle()
+
+      setProfil((data as Benutzerprofil | null) || null)
+    }
+
+    laden()
   }, [])
 
   return (
-    <div
-      style={{
-        padding: 14,
-        borderRadius: 16,
-        background: 'rgba(255,255,255,0.08)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        marginBottom: 8,
-      }}
-    >
-      <div style={{ fontSize: 12, opacity: 0.8 }}>Angemeldete Rolle</div>
-      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>{rolle}</div>
-
-      {benutzername ? (
-        <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9 }}>
-          Benutzer: {benutzername}
-        </div>
-      ) : null}
-
-      <div className="action-row" style={{ marginTop: 12 }}>
-        <button
-          type="button"
-          onClick={logout}
-          style={{ background: '#dc2626', width: '100%' }}
-        >
-          Logout
-        </button>
+    <div className="sidebar-user-card">
+      <div className="sidebar-user-label">Angemeldeter Zugang</div>
+      <div className="sidebar-user-name">{profil?.benutzername || 'Unbekannt'}</div>
+      <div className="sidebar-user-role-row">
+        <span className="sidebar-user-role">{profil?.rolle || 'Unbekannt'}</span>
+        <span className={`sidebar-user-status ${profil?.aktiv === false ? 'off' : 'on'}`}>
+          {profil?.aktiv === false ? 'Inaktiv' : 'Aktiv'}
+        </span>
       </div>
-
-      {fehler && (
-        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-          {fehler}
-        </div>
-      )}
     </div>
   )
 }

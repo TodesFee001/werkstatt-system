@@ -1,8 +1,9 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import RoleGuard from '../../components/RoleGuard'
+import AttachmentManager from '../../components/AttachmentManager'
 import { supabase } from '@/lib/supabase'
 
 type Fahrzeug = {
@@ -12,7 +13,8 @@ type Fahrzeug = {
   marke: string | null
   modell: string | null
   fahrgestellnummer: string | null
-  baujahr: number | null
+  farbe: string | null
+  kilometerstand: number | null
 }
 
 type Kunde = {
@@ -27,105 +29,115 @@ type Serviceauftrag = {
   fahrzeug_id: string | null
   art: string | null
   status: string | null
-  fehlerbeschreibung: string | null
-}
-
-type Historie = {
-  id: string
-  fahrzeug_id: string | null
-  datum: string | null
-  beschreibung: string | null
+  freigabe_status: string | null
 }
 
 export default function FahrzeugDetailPage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Lager', 'Behördenvertreter']}>
+      <FahrzeugDetailPageContent />
+    </RoleGuard>
+  )
+}
+
+function FahrzeugDetailPageContent() {
   const params = useParams()
-  const id = params.id as string
+  const id = String(params.id)
 
   const [fahrzeug, setFahrzeug] = useState<Fahrzeug | null>(null)
   const [kunde, setKunde] = useState<Kunde | null>(null)
   const [serviceauftraege, setServiceauftraege] = useState<Serviceauftrag[]>([])
-  const [historie, setHistorie] = useState<Historie[]>([])
   const [fehler, setFehler] = useState('')
 
-  async function ladeAlles() {
-    const { data: fahrzeugData, error: fahrzeugError } = await supabase
-      .from('fahrzeuge')
+  async function laden() {
+    const fahrzeugRes = await supabase.from('fahrzeuge').select('*').eq('id', id).maybeSingle()
+
+    if (fahrzeugRes.error) {
+      setFehler(fahrzeugRes.error.message)
+      return
+    }
+
+    const fahrzeugDaten = (fahrzeugRes.data as Fahrzeug | null) || null
+    setFahrzeug(fahrzeugDaten)
+
+    if (fahrzeugDaten?.kunde_id) {
+      const kundeRes = await supabase.from('kunden').select('*').eq('id', fahrzeugDaten.kunde_id).maybeSingle()
+      if (!kundeRes.error) {
+        setKunde((kundeRes.data as Kunde | null) || null)
+      }
+    }
+
+    const serviceRes = await supabase
+      .from('serviceauftraege')
       .select('*')
-      .eq('id', id)
-      .single()
+      .eq('fahrzeug_id', id)
+      .order('created_at', { ascending: false })
 
-    if (fahrzeugError || !fahrzeugData) {
-      setFehler(fahrzeugError?.message || 'Fahrzeug nicht gefunden')
+    if (serviceRes.error) {
+      setFehler(serviceRes.error.message)
       return
     }
 
-    setFahrzeug(fahrzeugData)
-
-    const [kundeRes, serviceRes, historieRes] = await Promise.all([
-      fahrzeugData.kunde_id
-        ? supabase.from('kunden').select('*').eq('id', fahrzeugData.kunde_id).single()
-        : Promise.resolve({ data: null, error: null } as any),
-      supabase.from('serviceauftraege').select('*').eq('fahrzeug_id', id),
-      supabase.from('servicehistorie').select('*').eq('fahrzeug_id', id),
-    ])
-
-    const error = kundeRes.error || serviceRes.error || historieRes.error
-
-    if (error) {
-      setFehler(error.message)
-      return
-    }
-
-    setKunde(kundeRes.data || null)
-    setServiceauftraege(serviceRes.data || [])
-    setHistorie(historieRes.data || [])
+    setServiceauftraege((serviceRes.data || []) as Serviceauftrag[])
   }
 
   useEffect(() => {
-    ladeAlles()
+    laden()
   }, [id])
 
   return (
-    <div className="page-card">
-      <h1>Fahrzeugdetail</h1>
-
-      {fahrzeug && (
-        <div className="list-box">
-          <strong>{fahrzeug.kennzeichen || '-'}</strong>
-          <br />
-          Marke/Modell: {fahrzeug.marke || '-'} {fahrzeug.modell || '-'}
-          <br />
-          FIN: {fahrzeug.fahrgestellnummer || '-'}
-          <br />
-          Baujahr: {fahrzeug.baujahr || '-'}
-          <br />
-          Kunde: {kunde ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim() : '-'}
-          <br />
-          {kunde && <Link href={`/kunden/${kunde.id}`}>Zur Kundendetailseite</Link>}
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div className="topbar">
+        <div>
+          <h1 className="topbar-title">Fahrzeugakte</h1>
+          <div className="topbar-subtitle">
+            Fahrzeugdetails, zugehörige Aufträge und fahrzeugbezogene Anhänge.
+          </div>
         </div>
-      )}
+      </div>
 
-      <h2>Serviceaufträge</h2>
-      {serviceauftraege.map((s) => (
-        <div key={s.id} className="list-box">
-          <strong>{s.art || '-'}</strong> – {s.status || '-'}
-          <br />
-          Fehler: {s.fehlerbeschreibung || '-'}
-          <br />
-          <Link href={`/serviceauftraege/${s.id}`}>Zur Auftragsdetailseite</Link>
-        </div>
-      ))}
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Fahrzeugdaten</h2>
+        {fahrzeug ? (
+          <div className="list-box">
+            <strong>{fahrzeug.kennzeichen || '-'}</strong>
+            <br />
+            Marke / Modell: {fahrzeug.marke || '-'} {fahrzeug.modell || '-'}
+            <br />
+            FIN: {fahrzeug.fahrgestellnummer || '-'}
+            <br />
+            Farbe: {fahrzeug.farbe || '-'}
+            <br />
+            Kilometerstand: {fahrzeug.kilometerstand ?? '-'}
+            <br />
+            Kunde: {kunde ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim() : '-'}
+          </div>
+        ) : (
+          <div className="muted">Fahrzeug nicht gefunden.</div>
+        )}
+      </div>
 
-      <h2>Servicehistorie</h2>
-      {historie.map((h) => (
-        <div key={h.id} className="list-box">
-          <strong>{h.datum || '-'}</strong>
-          <br />
-          {h.beschreibung || '-'}
-        </div>
-      ))}
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Serviceaufträge</h2>
+        {serviceauftraege.map((s) => (
+          <div key={s.id} className="list-box">
+            <strong>{s.art || '-'}</strong>
+            <br />
+            Status: {s.status || '-'}
+            <br />
+            Freigabe: {s.freigabe_status || '-'}
+          </div>
+        ))}
+        {serviceauftraege.length === 0 && <div className="muted">Keine Serviceaufträge vorhanden.</div>}
+      </div>
 
-      {fehler && <div className="error-box">Fehler: {fehler}</div>}
+      <AttachmentManager
+        bereich="fahrzeug"
+        datensatzId={id}
+        titel={fahrzeug ? `${fahrzeug.kennzeichen || '-'} ${fahrzeug.marke || ''} ${fahrzeug.modell || ''}`.trim() : 'Fahrzeugakte'}
+      />
+
+      {fehler && <div className="error-box">{fehler}</div>}
     </div>
   )
 }

@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import RoleGuard from '../components/RoleGuard'
 import { supabase } from '@/lib/supabase'
+import { logAktion } from '@/lib/activity-log'
 
 type Kunde = {
   id: string
@@ -46,7 +48,7 @@ type ZahlungRef = {
 
 export default function KundenPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Serviceannahme', 'Buchhaltung', 'Werkstatt']}>
+    <RoleGuard allowedRoles={['Admin', 'Serviceannahme', 'Buchhaltung', 'Werkstatt', 'Behördenvertreter']}>
       <KundenPageContent />
     </RoleGuard>
   )
@@ -133,21 +135,33 @@ function KundenPageContent() {
       return
     }
 
-    const { error } = await supabase.from('kunden').insert({
-      vorname: vorname || null,
-      nachname: nachname || null,
-      firmenname: firmenname || null,
-      email: email || null,
-      telefon: telefon || null,
-      strasse: strasse || null,
-      plz: plz || null,
-      ort: ort || null,
-    })
+    const insertRes = await supabase
+      .from('kunden')
+      .insert({
+        vorname: vorname || null,
+        nachname: nachname || null,
+        firmenname: firmenname || null,
+        email: email || null,
+        telefon: telefon || null,
+        strasse: strasse || null,
+        plz: plz || null,
+        ort: ort || null,
+      })
+      .select()
+      .single()
 
-    if (error) {
-      setFehler(error.message)
+    if (insertRes.error || !insertRes.data) {
+      setFehler(insertRes.error?.message || 'Kunde konnte nicht erstellt werden.')
       return
     }
+
+    await logAktion('kunde', 'erstellt', insertRes.data.id, firmenname || `${vorname} ${nachname}`.trim(), {
+      firmenname,
+      vorname,
+      nachname,
+      email,
+      telefon,
+    })
 
     setVorname('')
     setNachname('')
@@ -211,6 +225,14 @@ function KundenPageContent() {
       return
     }
 
+    await logAktion('kunde', 'bearbeitet', bearbeitenId, bearbeitenFirmenname || `${bearbeitenVorname} ${bearbeitenNachname}`.trim(), {
+      firmenname: bearbeitenFirmenname,
+      vorname: bearbeitenVorname,
+      nachname: bearbeitenNachname,
+      email: bearbeitenEmail,
+      telefon: bearbeitenTelefon,
+    })
+
     bearbeitenAbbrechen()
     setMeldung('Kunde wurde gespeichert.')
     laden()
@@ -231,6 +253,8 @@ function KundenPageContent() {
       return
     }
 
+    const kunde = kunden.find((k) => k.id === id)
+
     const ok = window.confirm('Kunden wirklich löschen?')
     if (!ok) return
 
@@ -240,6 +264,14 @@ function KundenPageContent() {
       setFehler(error.message)
       return
     }
+
+    await logAktion(
+      'kunde',
+      'geloescht',
+      id,
+      kunde?.firmenname || `${kunde?.vorname || ''} ${kunde?.nachname || ''}`.trim(),
+      null
+    )
 
     setMeldung('Kunde wurde gelöscht.')
     laden()
@@ -278,7 +310,7 @@ function KundenPageContent() {
         <div>
           <h1 className="topbar-title">Kunden</h1>
           <div className="topbar-subtitle">
-            Kundenverwaltung mit Historie für Rechnungen und Zahlungen direkt am Kunden.
+            Kundenverwaltung mit Kundenakte, Historie und Aktivitätslogging.
           </div>
         </div>
       </div>
@@ -361,6 +393,19 @@ function KundenPageContent() {
               <br />
               Adresse: {[k.strasse, k.plz, k.ort].filter(Boolean).join(', ') || '-'}
               <div className="action-row" style={{ marginTop: 10 }}>
+                <Link
+                  href={`/kunden/${k.id}`}
+                  style={{
+                    display: 'inline-block',
+                    padding: '10px 16px',
+                    background: '#2563eb',
+                    color: 'white',
+                    borderRadius: 12,
+                    textDecoration: 'none',
+                  }}
+                >
+                  Kundenakte
+                </Link>
                 <button type="button" onClick={() => bearbeitenStarten(k)}>
                   Bearbeiten
                 </button>

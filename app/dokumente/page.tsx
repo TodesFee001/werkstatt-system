@@ -1,39 +1,37 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import RoleGuard from '../components/RoleGuard'
 import { supabase } from '@/lib/supabase'
 
-// 🔴 WICHTIG: weil dein components-Ordner in app liegt
-import RoleGuard from '../components/RoleGuard'
-
-type Dokument = {
+type Anhang = {
   id: string
-  titel: string | null
-  beschreibung: string | null
-  dateipfad: string | null
   erstellt_am: string | null
+  bereich: string
+  datensatz_id: string
+  dateiname: string
+  public_url: string | null
+  hochgeladen_von_name: string | null
+  bemerkung: string | null
 }
 
 export default function DokumentePage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme']}>
-      <DokumenteContent />
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Behördenvertreter']}>
+      <DokumentePageContent />
     </RoleGuard>
   )
 }
 
-function DokumenteContent() {
-  const [dokumente, setDokumente] = useState<Dokument[]>([])
-
-  const [titel, setTitel] = useState('')
-  const [beschreibung, setBeschreibung] = useState('')
-  const [datei, setDatei] = useState<File | null>(null)
-
+function DokumentePageContent() {
+  const [dokumente, setDokumente] = useState<Anhang[]>([])
+  const [suche, setSuche] = useState('')
+  const [bereich, setBereich] = useState('alle')
   const [fehler, setFehler] = useState('')
 
-  async function ladeDokumente() {
+  async function laden() {
     const { data, error } = await supabase
-      .from('dokumente')
+      .from('anhaenge')
       .select('*')
       .order('erstellt_am', { ascending: false })
 
@@ -42,151 +40,89 @@ function DokumenteContent() {
       return
     }
 
-    setDokumente(data || [])
+    setDokumente((data || []) as Anhang[])
   }
 
   useEffect(() => {
-    ladeDokumente()
+    laden()
   }, [])
 
-  async function dokumentAnlegen(e: React.FormEvent) {
-    e.preventDefault()
-    setFehler('')
+  const gefiltert = useMemo(() => {
+    const q = suche.trim().toLowerCase()
 
-    if (!titel) {
-      setFehler('Bitte Titel eingeben')
-      return
-    }
+    return dokumente.filter((d) => {
+      if (bereich !== 'alle' && d.bereich !== bereich) return false
+      if (!q) return true
 
-    let dateipfad = null
-
-    // 🔹 Datei hochladen (optional)
-    if (datei) {
-      const dateiname = `${Date.now()}-${datei.name}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('dokumente')
-        .upload(dateiname, datei)
-
-      if (uploadError) {
-        setFehler(uploadError.message)
-        return
-      }
-
-      dateipfad = dateiname
-    }
-
-    const { error } = await supabase.from('dokumente').insert({
-      titel,
-      beschreibung: beschreibung || null,
-      dateipfad,
-      erstellt_am: new Date().toISOString(),
+      return [
+        d.dateiname,
+        d.bereich,
+        d.datensatz_id,
+        d.hochgeladen_von_name,
+        d.bemerkung,
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
     })
-
-    if (error) {
-      setFehler(error.message)
-      return
-    }
-
-    setTitel('')
-    setBeschreibung('')
-    setDatei(null)
-
-    ladeDokumente()
-  }
-
-  async function dokumentLoeschen(id: string, pfad: string | null) {
-    const ok = confirm('Dokument wirklich löschen?')
-    if (!ok) return
-
-    // 🔹 Datei aus Storage löschen
-    if (pfad) {
-      await supabase.storage.from('dokumente').remove([pfad])
-    }
-
-    const { error } = await supabase
-      .from('dokumente')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      setFehler(error.message)
-      return
-    }
-
-    ladeDokumente()
-  }
-
-  function getDownloadUrl(pfad: string | null) {
-    if (!pfad) return null
-
-    const { data } = supabase.storage
-      .from('dokumente')
-      .getPublicUrl(pfad)
-
-    return data.publicUrl
-  }
+  }, [dokumente, suche, bereich])
 
   return (
     <div className="page-card">
-      <h1>Dokumente</h1>
+      <h1>Dokumentenmodul</h1>
+      <p>Gesamtübersicht aller hochgeladenen Dateien und Dokumente im System.</p>
 
-      <form onSubmit={dokumentAnlegen} style={{ marginBottom: 24 }}>
-        <div className="form-row">
-          <input
-            placeholder="Titel"
-            value={titel}
-            onChange={(e) => setTitel(e.target.value)}
-            style={{ minWidth: 200 }}
-          />
-
-          <input
-            placeholder="Beschreibung"
-            value={beschreibung}
-            onChange={(e) => setBeschreibung(e.target.value)}
-            style={{ minWidth: 250 }}
-          />
-
-          <input
-            type="file"
-            onChange={(e) => setDatei(e.target.files?.[0] || null)}
-          />
-
-          <button type="submit">Dokument anlegen</button>
-        </div>
-      </form>
-
-      <div>
-        {dokumente.map((d) => {
-          const url = getDownloadUrl(d.dateipfad)
-
-          return (
-            <div key={d.id} className="list-box">
-              <strong>{d.titel}</strong>
-              <br />
-              {d.beschreibung || '-'}
-              <br />
-
-              {url && (
-                <a href={url} target="_blank" rel="noopener noreferrer">
-                  📄 Öffnen / Download
-                </a>
-              )}
-
-              <div style={{ marginTop: 10 }}>
-                <button
-                  onClick={() => dokumentLoeschen(d.id, d.dateipfad)}
-                  style={{ background: 'red' }}
-                >
-                  Löschen
-                </button>
-              </div>
-            </div>
-          )
-        })}
+      <div className="form-row" style={{ marginBottom: 16 }}>
+        <input
+          placeholder="Dokumente durchsuchen"
+          value={suche}
+          onChange={(e) => setSuche(e.target.value)}
+        />
+        <select value={bereich} onChange={(e) => setBereich(e.target.value)}>
+          <option value="alle">Alle Bereiche</option>
+          <option value="kunde">Kunde</option>
+          <option value="fahrzeug">Fahrzeug</option>
+          <option value="serviceauftrag">Serviceauftrag</option>
+          <option value="rechnung">Rechnung</option>
+        </select>
       </div>
 
-      {fehler && <div className="error-box">Fehler: {fehler}</div>}
+      {gefiltert.map((d) => (
+        <div key={d.id} className="list-box">
+          <strong>{d.dateiname}</strong>
+          <br />
+          Bereich: {d.bereich}
+          <br />
+          Datensatz: {d.datensatz_id}
+          <br />
+          Hochgeladen: {d.erstellt_am ? new Date(d.erstellt_am).toLocaleString('de-DE') : '-'}
+          <br />
+          Von: {d.hochgeladen_von_name || '-'}
+          <br />
+          Bemerkung: {d.bemerkung || '-'}
+          <div className="action-row" style={{ marginTop: 10 }}>
+            {d.public_url && (
+              <a
+                href={d.public_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-block',
+                  padding: '10px 16px',
+                  background: '#2563eb',
+                  color: 'white',
+                  borderRadius: 12,
+                  textDecoration: 'none',
+                }}
+              >
+                Öffnen
+              </a>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {gefiltert.length === 0 && <div className="muted">Keine Dokumente vorhanden.</div>}
+      {fehler && <div className="error-box">{fehler}</div>}
     </div>
   )
 }

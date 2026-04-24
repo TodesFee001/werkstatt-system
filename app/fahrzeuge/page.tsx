@@ -1,17 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import RoleGuard from '../components/RoleGuard'
 import { supabase } from '@/lib/supabase'
-
-type Fahrzeug = {
-  id: string
-  kunde_id: string | null
-  kennzeichen: string | null
-  marke: string | null
-  modell: string | null
-  fahrgestellnummer: string | null
-  baujahr: number | null
-}
 
 type Kunde = {
   id: string
@@ -20,126 +12,160 @@ type Kunde = {
   firmenname: string | null
 }
 
+type Fahrzeug = {
+  id: string
+  kunde_id: string | null
+  kennzeichen: string | null
+  marke: string | null
+  modell: string | null
+  fahrgestellnummer: string | null
+  farbe: string | null
+  kilometerstand: number | null
+}
+
 export default function FahrzeugePage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Werkstatt', 'Serviceannahme', 'Behördenvertreter']}>
+      <FahrzeugePageContent />
+    </RoleGuard>
+  )
+}
+
+function FahrzeugePageContent() {
   const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([])
   const [kunden, setKunden] = useState<Kunde[]>([])
+  const [suche, setSuche] = useState('')
+  const [kundenSuche, setKundenSuche] = useState('')
 
   const [kundeId, setKundeId] = useState('')
   const [kennzeichen, setKennzeichen] = useState('')
   const [marke, setMarke] = useState('')
   const [modell, setModell] = useState('')
   const [fahrgestellnummer, setFahrgestellnummer] = useState('')
-  const [baujahr, setBaujahr] = useState('')
-
-  const [suche, setSuche] = useState('')
-  const [sortierung, setSortierung] = useState('kennzeichen_asc')
+  const [farbe, setFarbe] = useState('')
+  const [kilometerstand, setKilometerstand] = useState('')
 
   const [bearbeitenId, setBearbeitenId] = useState<string | null>(null)
-  const [bearbeitenKundeId, setBearbeitenKundeId] = useState('')
-  const [bearbeitenKennzeichen, setBearbeitenKennzeichen] = useState('')
-  const [bearbeitenMarke, setBearbeitenMarke] = useState('')
-  const [bearbeitenModell, setBearbeitenModell] = useState('')
-  const [bearbeitenFahrgestellnummer, setBearbeitenFahrgestellnummer] = useState('')
-  const [bearbeitenBaujahr, setBearbeitenBaujahr] = useState('')
-
+  const [meldung, setMeldung] = useState('')
   const [fehler, setFehler] = useState('')
 
-  async function ladeAlles() {
-    const [fahrzeugeRes, kundenRes] = await Promise.all([
-      supabase.from('fahrzeuge').select('*').order('created_at', { ascending: false }),
-      supabase.from('kunden').select('*'),
+  async function laden() {
+    const [fRes, kRes] = await Promise.all([
+      supabase.from('fahrzeuge').select('*').order('kennzeichen'),
+      supabase.from('kunden').select('*').order('firmenname'),
     ])
 
-    const error = fahrzeugeRes.error || kundenRes.error
-
-    if (error) {
-      setFehler(error.message)
+    if (fRes.error || kRes.error) {
+      setFehler(fRes.error?.message || kRes.error?.message || '')
       return
     }
 
-    setFahrzeuge(fahrzeugeRes.data || [])
-    setKunden(kundenRes.data || [])
+    setFahrzeuge((fRes.data || []) as Fahrzeug[])
+    setKunden((kRes.data || []) as Kunde[])
   }
 
   useEffect(() => {
-    ladeAlles()
+    laden()
   }, [])
 
-  async function fahrzeugAnlegen(e: React.FormEvent) {
-    e.preventDefault()
-    setFehler('')
+  function kundenName(id: string | null) {
+    const k = kunden.find((x) => x.id === id)
+    return k ? k.firmenname || `${k.vorname || ''} ${k.nachname || ''}`.trim() : '-'
+  }
 
-    const { error } = await supabase.from('fahrzeuge').insert({
-      kunde_id: kundeId || null,
-      kennzeichen: kennzeichen || null,
-      marke: marke || null,
-      modell: modell || null,
-      fahrgestellnummer: fahrgestellnummer || null,
-      baujahr: baujahr ? Number(baujahr) : null,
+  const kundenGefiltert = useMemo(() => {
+    const q = kundenSuche.trim().toLowerCase()
+    return kunden.filter((k) => {
+      if (!q) return true
+      return [k.firmenname, k.vorname, k.nachname]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
     })
+  }, [kunden, kundenSuche])
 
-    if (error) {
-      setFehler(error.message)
-      return
-    }
+  const fahrzeugeGefiltert = useMemo(() => {
+    const q = suche.trim().toLowerCase()
+    return fahrzeuge.filter((f) => {
+      if (!q) return true
+      return [
+        f.kennzeichen,
+        f.marke,
+        f.modell,
+        f.fahrgestellnummer,
+        f.farbe,
+        kundenName(f.kunde_id),
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    })
+  }, [fahrzeuge, suche, kunden])
 
+  function resetForm() {
+    setBearbeitenId(null)
     setKundeId('')
+    setKundenSuche('')
     setKennzeichen('')
     setMarke('')
     setModell('')
     setFahrgestellnummer('')
-    setBaujahr('')
-    ladeAlles()
+    setFarbe('')
+    setKilometerstand('')
   }
 
-  function bearbeitenStarten(fahrzeug: Fahrzeug) {
-    setBearbeitenId(fahrzeug.id)
-    setBearbeitenKundeId(fahrzeug.kunde_id || '')
-    setBearbeitenKennzeichen(fahrzeug.kennzeichen || '')
-    setBearbeitenMarke(fahrzeug.marke || '')
-    setBearbeitenModell(fahrzeug.modell || '')
-    setBearbeitenFahrgestellnummer(fahrzeug.fahrgestellnummer || '')
-    setBearbeitenBaujahr(String(fahrzeug.baujahr ?? ''))
+  function bearbeitenStarten(f: Fahrzeug) {
+    setBearbeitenId(f.id)
+    setKundeId(f.kunde_id || '')
+    setKundenSuche(kundenName(f.kunde_id))
+    setKennzeichen(f.kennzeichen || '')
+    setMarke(f.marke || '')
+    setModell(f.modell || '')
+    setFahrgestellnummer(f.fahrgestellnummer || '')
+    setFarbe(f.farbe || '')
+    setKilometerstand(f.kilometerstand != null ? String(f.kilometerstand) : '')
   }
 
-  function bearbeitenAbbrechen() {
-    setBearbeitenId(null)
-    setBearbeitenKundeId('')
-    setBearbeitenKennzeichen('')
-    setBearbeitenMarke('')
-    setBearbeitenModell('')
-    setBearbeitenFahrgestellnummer('')
-    setBearbeitenBaujahr('')
-  }
-
-  async function fahrzeugSpeichern(e: React.FormEvent) {
+  async function speichern(e: React.FormEvent) {
     e.preventDefault()
-    if (!bearbeitenId) return
+    setFehler('')
+    setMeldung('')
 
-    const { error } = await supabase
-      .from('fahrzeuge')
-      .update({
-        kunde_id: bearbeitenKundeId || null,
-        kennzeichen: bearbeitenKennzeichen || null,
-        marke: bearbeitenMarke || null,
-        modell: bearbeitenModell || null,
-        fahrgestellnummer: bearbeitenFahrgestellnummer || null,
-        baujahr: bearbeitenBaujahr ? Number(bearbeitenBaujahr) : null,
-      })
-      .eq('id', bearbeitenId)
-
-    if (error) {
-      setFehler(error.message)
+    if (!kundeId) {
+      setFehler('Bitte einen Kunden auswählen.')
       return
     }
 
-    bearbeitenAbbrechen()
-    ladeAlles()
+    if (!kennzeichen.trim()) {
+      setFehler('Bitte Kennzeichen eingeben.')
+      return
+    }
+
+    const payload = {
+      kunde_id: kundeId,
+      kennzeichen: kennzeichen || null,
+      marke: marke || null,
+      modell: modell || null,
+      fahrgestellnummer: fahrgestellnummer || null,
+      farbe: farbe || null,
+      kilometerstand: kilometerstand ? Number(kilometerstand) : null,
+    }
+
+    const res = bearbeitenId
+      ? await supabase.from('fahrzeuge').update(payload).eq('id', bearbeitenId)
+      : await supabase.from('fahrzeuge').insert(payload)
+
+    if (res.error) {
+      setFehler(res.error.message)
+      return
+    }
+
+    setMeldung(bearbeitenId ? 'Fahrzeug wurde gespeichert.' : 'Fahrzeug wurde erstellt.')
+    resetForm()
+    laden()
   }
 
-  async function fahrzeugLoeschen(id: string) {
-    const bestaetigt = window.confirm('Fahrzeug wirklich löschen?')
-    if (!bestaetigt) return
+  async function loeschen(id: string) {
+    const ok = window.confirm('Fahrzeug wirklich löschen?')
+    if (!ok) return
 
     const { error } = await supabase.from('fahrzeuge').delete().eq('id', id)
 
@@ -148,138 +174,108 @@ export default function FahrzeugePage() {
       return
     }
 
-    ladeAlles()
+    setMeldung('Fahrzeug wurde gelöscht.')
+    laden()
   }
-
-  function kundeName(id: string | null) {
-    if (!id) return '-'
-    const kunde = kunden.find((k) => k.id === id)
-    if (!kunde) return '-'
-    return kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
-  }
-
-  const gefiltert = useMemo(() => {
-    const q = suche.trim().toLowerCase()
-
-    let liste = fahrzeuge.filter((f) => {
-      if (!q) return true
-      const kunde = kundeName(f.kunde_id)
-      return [
-        f.kennzeichen,
-        f.marke,
-        f.modell,
-        f.fahrgestellnummer,
-        kunde,
-      ]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q))
-    })
-
-    liste = [...liste].sort((a, b) => {
-      if (sortierung === 'kennzeichen_asc') return (a.kennzeichen || '').localeCompare(b.kennzeichen || '')
-      if (sortierung === 'kennzeichen_desc') return (b.kennzeichen || '').localeCompare(a.kennzeichen || '')
-      if (sortierung === 'marke_asc') return (a.marke || '').localeCompare(b.marke || '')
-      if (sortierung === 'marke_desc') return (b.marke || '').localeCompare(a.marke || '')
-      return 0
-    })
-
-    return liste
-  }, [fahrzeuge, suche, sortierung])
 
   return (
-    <div className="page-card">
-      <h1>Fahrzeuge</h1>
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div className="topbar">
+        <div>
+          <h1 className="topbar-title">Fahrzeuge</h1>
+          <div className="topbar-subtitle">Fahrzeuge mit integrierter Kundensuche und direkter Kundenauswahl.</div>
+        </div>
+      </div>
 
-      <form onSubmit={fahrzeugAnlegen} style={{ marginBottom: 24 }}>
+      <form onSubmit={speichern} className="page-card">
+        <h2 style={{ marginTop: 0 }}>{bearbeitenId ? 'Fahrzeug bearbeiten' : 'Fahrzeug anlegen'}</h2>
+
         <div className="form-row">
-          <select value={kundeId} onChange={(e) => setKundeId(e.target.value)}>
-            <option value="">Kunde auswählen</option>
-            {kunden.map((kunde) => (
-              <option key={kunde.id} value={kunde.id}>
-                {kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()}
-              </option>
-            ))}
-          </select>
+          <input
+            placeholder="Kunde suchen und auswählen"
+            value={kundenSuche}
+            onChange={(e) => {
+              setKundenSuche(e.target.value)
+              setKundeId('')
+            }}
+          />
           <input placeholder="Kennzeichen" value={kennzeichen} onChange={(e) => setKennzeichen(e.target.value)} />
+        </div>
+
+        {kundenSuche && !kundeId && (
+          <div className="list-box" style={{ marginTop: 12 }}>
+            {kundenGefiltert.slice(0, 8).map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => {
+                  setKundeId(k.id)
+                  setKundenSuche(kundenName(k.id))
+                }}
+                style={{ margin: 4, background: '#374151' }}
+              >
+                {kundenName(k.id)}
+              </button>
+            ))}
+            {kundenGefiltert.length === 0 && <div className="muted">Kein Kunde gefunden.</div>}
+          </div>
+        )}
+
+        <div className="form-row" style={{ marginTop: 12 }}>
           <input placeholder="Marke" value={marke} onChange={(e) => setMarke(e.target.value)} />
           <input placeholder="Modell" value={modell} onChange={(e) => setModell(e.target.value)} />
-          <input placeholder="Fahrgestellnummer" value={fahrgestellnummer} onChange={(e) => setFahrgestellnummer(e.target.value)} />
-          <input placeholder="Baujahr" value={baujahr} onChange={(e) => setBaujahr(e.target.value)} />
-          <button type="submit">Fahrzeug anlegen</button>
+          <input placeholder="FIN / Fahrgestellnummer" value={fahrgestellnummer} onChange={(e) => setFahrgestellnummer(e.target.value)} />
+        </div>
+
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <input placeholder="Farbe" value={farbe} onChange={(e) => setFarbe(e.target.value)} />
+          <input placeholder="Kilometerstand" value={kilometerstand} onChange={(e) => setKilometerstand(e.target.value)} />
+        </div>
+
+        <div className="action-row">
+          <button type="submit">{bearbeitenId ? 'Speichern' : 'Fahrzeug erstellen'}</button>
+          {bearbeitenId && (
+            <button type="button" onClick={resetForm} style={{ background: '#6b7280' }}>
+              Abbrechen
+            </button>
+          )}
         </div>
       </form>
 
-      <div className="list-box" style={{ marginBottom: 20 }}>
-        <div className="form-row">
-          <input
-            placeholder="Fahrzeuge suchen"
-            value={suche}
-            onChange={(e) => setSuche(e.target.value)}
-          />
-          <select value={sortierung} onChange={(e) => setSortierung(e.target.value)}>
-            <option value="kennzeichen_asc">Kennzeichen A-Z</option>
-            <option value="kennzeichen_desc">Kennzeichen Z-A</option>
-            <option value="marke_asc">Marke A-Z</option>
-            <option value="marke_desc">Marke Z-A</option>
-          </select>
+      <div className="page-card">
+        <input placeholder="Fahrzeuge suchen" value={suche} onChange={(e) => setSuche(e.target.value)} />
+
+        <div style={{ marginTop: 16 }}>
+          {fahrzeugeGefiltert.map((f) => (
+            <div key={f.id} className="list-box">
+              <strong>{f.kennzeichen || '-'}</strong>
+              <br />
+              Kunde: {kundenName(f.kunde_id)}
+              <br />
+              Fahrzeug: {f.marke || '-'} {f.modell || '-'}
+              <br />
+              FIN: {f.fahrgestellnummer || '-'}
+              <br />
+              Kilometerstand: {f.kilometerstand ?? '-'}
+              <div className="action-row">
+                <Link
+                  href={`/fahrzeuge/${f.id}`}
+                  style={{ padding: '10px 16px', background: '#2563eb', color: 'white', borderRadius: 12, textDecoration: 'none' }}
+                >
+                  Fahrzeugakte
+                </Link>
+                <button type="button" onClick={() => bearbeitenStarten(f)}>Bearbeiten</button>
+                <button type="button" onClick={() => loeschen(f.id)} style={{ background: '#dc2626' }}>Löschen</button>
+              </div>
+            </div>
+          ))}
+
+          {fahrzeugeGefiltert.length === 0 && <div className="muted">Keine Fahrzeuge gefunden.</div>}
         </div>
       </div>
 
-      {bearbeitenId && (
-        <form onSubmit={fahrzeugSpeichern} className="list-box" style={{ marginBottom: 20 }}>
-          <h3 style={{ marginTop: 0 }}>Fahrzeug bearbeiten</h3>
-
-          <div className="form-row">
-            <select value={bearbeitenKundeId} onChange={(e) => setBearbeitenKundeId(e.target.value)}>
-              <option value="">Kunde auswählen</option>
-              {kunden.map((kunde) => (
-                <option key={kunde.id} value={kunde.id}>
-                  {kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()}
-                </option>
-              ))}
-            </select>
-            <input placeholder="Kennzeichen" value={bearbeitenKennzeichen} onChange={(e) => setBearbeitenKennzeichen(e.target.value)} />
-            <input placeholder="Marke" value={bearbeitenMarke} onChange={(e) => setBearbeitenMarke(e.target.value)} />
-            <input placeholder="Modell" value={bearbeitenModell} onChange={(e) => setBearbeitenModell(e.target.value)} />
-            <input placeholder="Fahrgestellnummer" value={bearbeitenFahrgestellnummer} onChange={(e) => setBearbeitenFahrgestellnummer(e.target.value)} />
-            <input placeholder="Baujahr" value={bearbeitenBaujahr} onChange={(e) => setBearbeitenBaujahr(e.target.value)} />
-          </div>
-
-          <div className="form-row">
-            <button type="submit">Speichern</button>
-            <button type="button" onClick={bearbeitenAbbrechen} style={{ background: '#6b7280' }}>
-              Abbrechen
-            </button>
-          </div>
-        </form>
-      )}
-
-      <div>
-        {gefiltert.map((fahrzeug) => (
-          <div key={fahrzeug.id} className="list-box">
-            <strong>{fahrzeug.kennzeichen || '-'}</strong> – {fahrzeug.marke || '-'} {fahrzeug.modell || '-'}
-            <br />
-            Kunde: {kundeName(fahrzeug.kunde_id)}
-            <br />
-            FIN: {fahrzeug.fahrgestellnummer || '-'}
-            <br />
-            Baujahr: {fahrzeug.baujahr || '-'}
-            <br />
-            <a href={`/fahrzeuge/${fahrzeug.id}`}>Zur Fahrzeugdetailseite</a>
-
-            <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
-              <button type="button" onClick={() => bearbeitenStarten(fahrzeug)}>
-                Bearbeiten
-              </button>
-              <button type="button" onClick={() => fahrzeugLoeschen(fahrzeug.id)} style={{ background: '#dc2626' }}>
-                Löschen
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {fehler && <div className="error-box">Fehler: {fehler}</div>}
+      {meldung && <div className="badge badge-success">{meldung}</div>}
+      {fehler && <div className="error-box">{fehler}</div>}
     </div>
   )
 }
