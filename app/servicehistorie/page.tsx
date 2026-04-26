@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import RoleGuard from '../components/RoleGuard'
 
 type Kunde = {
   id: string
@@ -29,7 +30,7 @@ type Historie = {
   beschreibung: string | null
 }
 
-export default function ServicehistoriePage() {
+function ServicehistoriePageContent() {
   const [kunden, setKunden] = useState<Kunde[]>([])
   const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([])
   const [historie, setHistorie] = useState<Historie[]>([])
@@ -40,6 +41,15 @@ export default function ServicehistoriePage() {
   const [kilometerstand, setKilometerstand] = useState('')
   const [titel, setTitel] = useState('')
   const [beschreibung, setBeschreibung] = useState('')
+
+  const [bearbeitenId, setBearbeitenId] = useState<string | null>(null)
+  const [bearbeitenFahrzeugId, setBearbeitenFahrzeugId] = useState('')
+  const [bearbeitenHistorientyp, setBearbeitenHistorientyp] = useState('service')
+  const [bearbeitenDatum, setBearbeitenDatum] = useState('')
+  const [bearbeitenKilometerstand, setBearbeitenKilometerstand] = useState('')
+  const [bearbeitenTitel, setBearbeitenTitel] = useState('')
+  const [bearbeitenBeschreibung, setBearbeitenBeschreibung] = useState('')
+
   const [fehler, setFehler] = useState('')
 
   async function ladeAlles() {
@@ -119,6 +129,74 @@ export default function ServicehistoriePage() {
     setKilometerstand('')
     setTitel('')
     setBeschreibung('')
+    ladeAlles()
+  }
+
+  function bearbeitenStarten(eintrag: Historie) {
+    setBearbeitenId(eintrag.id)
+    setBearbeitenFahrzeugId(eintrag.fahrzeug_id || '')
+    setBearbeitenHistorientyp(eintrag.historientyp || 'service')
+    setBearbeitenDatum(eintrag.datum || '')
+    setBearbeitenKilometerstand(String(eintrag.kilometerstand ?? ''))
+    setBearbeitenTitel(eintrag.titel || '')
+    setBearbeitenBeschreibung(eintrag.beschreibung || '')
+  }
+
+  function bearbeitenAbbrechen() {
+    setBearbeitenId(null)
+    setBearbeitenFahrzeugId('')
+    setBearbeitenHistorientyp('service')
+    setBearbeitenDatum('')
+    setBearbeitenKilometerstand('')
+    setBearbeitenTitel('')
+    setBearbeitenBeschreibung('')
+  }
+
+  async function historieSpeichern(e: React.FormEvent) {
+    e.preventDefault()
+    if (!bearbeitenId) return
+
+    const fahrzeug = fahrzeuge.find((f) => f.id === bearbeitenFahrzeugId)
+
+    const { error } = await supabase
+      .from('servicehistorie')
+      .update({
+        fahrzeug_id: bearbeitenFahrzeugId || null,
+        kunde_id: fahrzeug?.kunde_id || null,
+        historientyp: bearbeitenHistorientyp,
+        datum: bearbeitenDatum,
+        kilometerstand: bearbeitenKilometerstand ? Number(bearbeitenKilometerstand) : null,
+        titel: bearbeitenTitel,
+        beschreibung: bearbeitenBeschreibung || null,
+      })
+      .eq('id', bearbeitenId)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    bearbeitenAbbrechen()
+    ladeAlles()
+  }
+
+  async function historieLoeschen(id: string) {
+    const bestaetigt = window.confirm('Historieneintrag wirklich löschen?')
+    if (!bestaetigt) return
+
+    const { error } = await supabase
+      .from('servicehistorie')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    if (bearbeitenId === id) {
+      bearbeitenAbbrechen()
+    }
 
     ladeAlles()
   }
@@ -204,6 +282,75 @@ export default function ServicehistoriePage() {
         <button type="submit">Historieneintrag anlegen</button>
       </form>
 
+      {bearbeitenId && (
+        <form onSubmit={historieSpeichern} className="list-box" style={{ marginBottom: 20 }}>
+          <h3 style={{ marginTop: 0 }}>Historieneintrag bearbeiten</h3>
+
+          <div className="form-row">
+            <select
+              value={bearbeitenFahrzeugId}
+              onChange={(e) => setBearbeitenFahrzeugId(e.target.value)}
+            >
+              <option value="">Fahrzeug auswählen</option>
+              {fahrzeuge.map((fahrzeug) => (
+                <option key={fahrzeug.id} value={fahrzeug.id}>
+                  {fahrzeug.kennzeichen || '-'} – {fahrzeug.marke || '-'} {fahrzeug.modell || '-'}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={bearbeitenHistorientyp}
+              onChange={(e) => setBearbeitenHistorientyp(e.target.value)}
+            >
+              <option value="service">service</option>
+              <option value="wartung">wartung</option>
+              <option value="reparatur">reparatur</option>
+              <option value="diagnose">diagnose</option>
+              <option value="inspektion">inspektion</option>
+            </select>
+
+            <input
+              type="date"
+              value={bearbeitenDatum}
+              onChange={(e) => setBearbeitenDatum(e.target.value)}
+            />
+
+            <input
+              placeholder="Kilometerstand"
+              value={bearbeitenKilometerstand}
+              onChange={(e) => setBearbeitenKilometerstand(e.target.value)}
+            />
+
+            <input
+              placeholder="Titel"
+              value={bearbeitenTitel}
+              onChange={(e) => setBearbeitenTitel(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginTop: 12, marginBottom: 12 }}>
+            <textarea
+              placeholder="Beschreibung / Notiz"
+              value={bearbeitenBeschreibung}
+              onChange={(e) => setBearbeitenBeschreibung(e.target.value)}
+              style={{ width: '100%', minHeight: 100 }}
+            />
+          </div>
+
+          <div className="form-row">
+            <button type="submit">Speichern</button>
+            <button
+              type="button"
+              onClick={bearbeitenAbbrechen}
+              style={{ background: '#6b7280' }}
+            >
+              Abbrechen
+            </button>
+          </div>
+        </form>
+      )}
+
       <div>
         {historie.map((eintrag) => (
           <div key={eintrag.id} className="list-box">
@@ -220,11 +367,32 @@ export default function ServicehistoriePage() {
             Kunde: {kundeAnzeige(eintrag.kunde_id)}
             <br />
             Beschreibung: {eintrag.beschreibung || '-'}
+
+            <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
+              <button type="button" onClick={() => bearbeitenStarten(eintrag)}>
+                Bearbeiten
+              </button>
+              <button
+                type="button"
+                onClick={() => historieLoeschen(eintrag.id)}
+                style={{ background: '#dc2626' }}
+              >
+                Löschen
+              </button>
+            </div>
           </div>
         ))}
       </div>
 
       {fehler && <div className="error-box">Fehler: {fehler}</div>}
     </div>
+  )
+}
+
+export default function ServicehistoriePage() {
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme']}>
+      <ServicehistoriePageContent />
+    </RoleGuard>
   )
 }

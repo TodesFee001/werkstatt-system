@@ -1,101 +1,228 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import RoleGuard from '../components/RoleGuard'
 import { supabase } from '@/lib/supabase'
 
-type Rang = {
-  id: string
-  name: string
-}
+const SEITEN = [
+  { pfad: '/', name: 'Dashboard' },
+  { pfad: '/kunden', name: 'Kunden' },
+  { pfad: '/fahrzeuge', name: 'Fahrzeuge' },
+  { pfad: '/serviceauftraege', name: 'Serviceaufträge' },
+  { pfad: '/termine', name: 'Termine' },
+  { pfad: '/kalender', name: 'Kalender / Planung' },
+  { pfad: '/lager', name: 'Lager' },
+  { pfad: '/rechnungen', name: 'Rechnungen' },
+  { pfad: '/zahlungen', name: 'Zahlungen' },
+  { pfad: '/forderungen', name: 'Forderungen' },
+  { pfad: '/mahnungen', name: 'Mahnungen' },
+  { pfad: '/dokumente', name: 'Dokumente' },
+]
 
-type Qualifikation = {
+type Modus = {
   id: string
-  name: string
+  aktiv: boolean
+  seiten: string[] | null
 }
 
 export default function EinstellungenPage() {
-  const [raenge, setRaenge] = useState<Rang[]>([])
-  const [qualifikationen, setQualifikationen] = useState<Qualifikation[]>([])
+  return (
+    <RoleGuard allowedRoles={['Admin']}>
+      <EinstellungenPageContent />
+    </RoleGuard>
+  )
+}
 
-  const [rangName, setRangName] = useState('')
-  const [qualiName, setQualiName] = useState('')
-
+function EinstellungenPageContent() {
+  const [lockdown, setLockdown] = useState<Modus | null>(null)
+  const [wartung, setWartung] = useState<Modus | null>(null)
+  const [popupOffen, setPopupOffen] = useState(false)
+  const [wartungsSeiten, setWartungsSeiten] = useState<string[]>([])
+  const [meldung, setMeldung] = useState('')
   const [fehler, setFehler] = useState('')
 
-  async function ladeAlles() {
-    const { data: r } = await supabase.from('raenge').select('*')
-    const { data: q } = await supabase.from('qualifikationen').select('*')
+  async function laden() {
+    const { data, error } = await supabase
+      .from('system_modus')
+      .select('*')
+      .in('id', ['lockdown', 'wartung'])
 
-    setRaenge(r || [])
-    setQualifikationen(q || [])
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    const rows = (data || []) as Modus[]
+    const lockdownRow = rows.find((r) => r.id === 'lockdown') || null
+    const wartungRow = rows.find((r) => r.id === 'wartung') || null
+
+    setLockdown(lockdownRow)
+    setWartung(wartungRow)
+    setWartungsSeiten(wartungRow?.seiten || [])
   }
 
   useEffect(() => {
-    ladeAlles()
+    laden()
   }, [])
 
-  async function rangAnlegen(e: any) {
-    e.preventDefault()
+  async function lockdownToggle() {
+    setFehler('')
+    setMeldung('')
 
-    const { error } = await supabase.from('raenge').insert({
-      name: rangName,
-    })
+    const neu = !lockdown?.aktiv
 
-    if (error) return setFehler(error.message)
+    const sessionRes = await supabase.auth.getSession()
+    const userId = sessionRes.data.session?.user?.id || null
 
-    setRangName('')
-    ladeAlles()
+    const { error } = await supabase
+      .from('system_modus')
+      .update({
+        aktiv: neu,
+        aktualisiert_am: new Date().toISOString(),
+        aktualisiert_von: userId,
+      })
+      .eq('id', 'lockdown')
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    setMeldung(neu ? 'Lockdown wurde aktiviert.' : 'Lockdown wurde deaktiviert.')
+    laden()
   }
 
-  async function qualiAnlegen(e: any) {
-    e.preventDefault()
-
-    const { error } = await supabase.from('qualifikationen').insert({
-      name: qualiName,
+  function toggleSeite(pfad: string) {
+    setWartungsSeiten((prev) => {
+      if (prev.includes(pfad)) {
+        return prev.filter((p) => p !== pfad)
+      }
+      return [...prev, pfad]
     })
+  }
 
-    if (error) return setFehler(error.message)
+  async function wartungSpeichern(aktiv: boolean) {
+    setFehler('')
+    setMeldung('')
 
-    setQualiName('')
-    ladeAlles()
+    const sessionRes = await supabase.auth.getSession()
+    const userId = sessionRes.data.session?.user?.id || null
+
+    const { error } = await supabase
+      .from('system_modus')
+      .update({
+        aktiv,
+        seiten: wartungsSeiten,
+        aktualisiert_am: new Date().toISOString(),
+        aktualisiert_von: userId,
+      })
+      .eq('id', 'wartung')
+
+    if (error) {
+      setFehler(error.message)
+      return
+    }
+
+    setPopupOffen(false)
+    setMeldung(aktiv ? 'Wartungsmodus wurde gespeichert.' : 'Wartungsmodus wurde entfernt.')
+    laden()
   }
 
   return (
-    <div className="page-card">
-      <h1>Einstellungen</h1>
-
-      <h2>Ränge</h2>
-      <form onSubmit={rangAnlegen} className="form-row">
-        <input
-          placeholder="Rang (z.B. Meister)"
-          value={rangName}
-          onChange={(e) => setRangName(e.target.value)}
-        />
-        <button>Hinzufügen</button>
-      </form>
-
-      {raenge.map((r) => (
-        <div key={r.id} className="list-box">
-          {r.name}
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div className="topbar">
+        <div>
+          <h1 className="topbar-title">Einstellungen</h1>
+          <div className="topbar-subtitle">
+            Systemsteuerung für Lockdown, Wartung und Administrationsfunktionen.
+          </div>
         </div>
-      ))}
+      </div>
 
-      <h2 style={{ marginTop: 40 }}>Qualifikationen</h2>
-      <form onSubmit={qualiAnlegen} className="form-row">
-        <input
-          placeholder="Qualifikation (z.B. TÜV)"
-          value={qualiName}
-          onChange={(e) => setQualiName(e.target.value)}
-        />
-        <button>Hinzufügen</button>
-      </form>
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Lockdown-Modus</h2>
+        <p>
+          Sperrt das komplette System für alle Rollen außer Admin.
+        </p>
 
-      {qualifikationen.map((q) => (
-        <div key={q.id} className="list-box">
-          {q.name}
+        <div
+          className="list-box"
+          style={{
+            border: lockdown?.aktiv ? '2px solid #dc2626' : '1px solid #36414d',
+            background: lockdown?.aktiv ? 'rgba(220,38,38,0.18)' : undefined,
+          }}
+        >
+          Status: <strong>{lockdown?.aktiv ? 'AKTIV' : 'INAKTIV'}</strong>
         </div>
-      ))}
 
+        <div className="action-row">
+          <button
+            type="button"
+            onClick={lockdownToggle}
+            style={{
+              background: lockdown?.aktiv ? '#16a34a' : '#dc2626',
+            }}
+          >
+            {lockdown?.aktiv ? 'Lockdown deaktivieren' : 'Lockdown aktivieren'}
+          </button>
+        </div>
+      </div>
+
+      <div className="page-card">
+        <h2 style={{ marginTop: 0 }}>Wartungsmodus</h2>
+        <p>
+          Einzelne Seiten können gezielt in Wartung gesetzt werden.
+        </p>
+
+        <div className="list-box">
+          Status: <strong>{wartung?.aktiv ? 'AKTIV' : 'INAKTIV'}</strong>
+          <br />
+          Seiten: {(wartung?.seiten || []).length > 0 ? (wartung?.seiten || []).join(', ') : '-'}
+        </div>
+
+        <div className="action-row">
+          <button type="button" onClick={() => setPopupOffen(true)}>
+            Wartungsmodus verwalten
+          </button>
+        </div>
+      </div>
+
+      {popupOffen && (
+        <div className="modal-backdrop">
+          <div className="maintenance-modal">
+            <h2 style={{ marginTop: 0 }}>Wartungsmodus verwalten</h2>
+            <p>Wähle die Seiten aus, die gesperrt werden sollen.</p>
+
+            <div style={{ display: 'grid', gap: 10 }}>
+              {SEITEN.map((s) => (
+                <label key={s.pfad} className="maintenance-option">
+                  <input
+                    type="checkbox"
+                    checked={wartungsSeiten.includes(s.pfad)}
+                    onChange={() => toggleSeite(s.pfad)}
+                  />
+                  <span>{s.name}</span>
+                  <small>{s.pfad}</small>
+                </label>
+              ))}
+            </div>
+
+            <div className="action-row">
+              <button type="button" onClick={() => wartungSpeichern(true)}>
+                Wartung aktivieren / speichern
+              </button>
+              <button type="button" onClick={() => wartungSpeichern(false)} style={{ background: '#16a34a' }}>
+                Wartung entfernen
+              </button>
+              <button type="button" onClick={() => setPopupOffen(false)} style={{ background: '#6b7280' }}>
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {meldung && <div className="badge badge-success">{meldung}</div>}
       {fehler && <div className="error-box">{fehler}</div>}
     </div>
   )

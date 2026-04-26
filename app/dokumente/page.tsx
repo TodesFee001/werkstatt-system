@@ -1,274 +1,128 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import RoleGuard from '../components/RoleGuard'
 import { supabase } from '@/lib/supabase'
 
-type Kunde = {
+type Anhang = {
   id: string
-  vorname: string | null
-  nachname: string | null
-  firmenname: string | null
-}
-
-type Fahrzeug = {
-  id: string
-  kennzeichen: string | null
-  marke: string | null
-  modell: string | null
-}
-
-type Mitarbeiter = {
-  id: string
-  vorname: string
-  nachname: string
-}
-
-type Dokument = {
-  id: string
-  titel: string
+  erstellt_am: string | null
+  bereich: string
+  datensatz_id: string
   dateiname: string
-  dateipfad: string
-  dateityp: string | null
-  bezug_typ: string | null
-  bezug_id: string | null
-  created_at: string
+  public_url: string | null
+  hochgeladen_von_name: string | null
+  bemerkung: string | null
 }
 
 export default function DokumentePage() {
-  const [kunden, setKunden] = useState<Kunde[]>([])
-  const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([])
-  const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([])
-  const [dokumente, setDokumente] = useState<Dokument[]>([])
+  return (
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Behördenvertreter']}>
+      <DokumentePageContent />
+    </RoleGuard>
+  )
+}
 
-  const [titel, setTitel] = useState('')
-  const [bezugTyp, setBezugTyp] = useState('kunde')
-  const [bezugId, setBezugId] = useState('')
-  const [datei, setDatei] = useState<File | null>(null)
-
+function DokumentePageContent() {
+  const [dokumente, setDokumente] = useState<Anhang[]>([])
+  const [suche, setSuche] = useState('')
+  const [bereich, setBereich] = useState('alle')
   const [fehler, setFehler] = useState('')
-  const [laedt, setLaedt] = useState(false)
 
-  async function ladeAlles() {
-    const { data: kData, error: kError } = await supabase
-      .from('kunden')
+  async function laden() {
+    const { data, error } = await supabase
+      .from('anhaenge')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('erstellt_am', { ascending: false })
 
-    const { data: fData, error: fError } = await supabase
-      .from('fahrzeuge')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    const { data: mData, error: mError } = await supabase
-      .from('mitarbeiter')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    const { data: dData, error: dError } = await supabase
-      .from('dokumente')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (kError || fError || mError || dError) {
-      setFehler(kError?.message || fError?.message || mError?.message || dError?.message || 'Fehler')
+    if (error) {
+      setFehler(error.message)
       return
     }
 
-    setKunden(kData || [])
-    setFahrzeuge(fData || [])
-    setMitarbeiter(mData || [])
-    setDokumente(dData || [])
+    setDokumente((data || []) as Anhang[])
   }
 
   useEffect(() => {
-    ladeAlles()
+    laden()
   }, [])
 
-  async function dokumentAnlegen(e: React.FormEvent) {
-    e.preventDefault()
-    setFehler('')
+  const gefiltert = useMemo(() => {
+    const q = suche.trim().toLowerCase()
 
-    if (!titel) {
-      setFehler('Bitte einen Titel eingeben.')
-      return
-    }
+    return dokumente.filter((d) => {
+      if (bereich !== 'alle' && d.bereich !== bereich) return false
+      if (!q) return true
 
-    if (!datei) {
-      setFehler('Bitte eine Datei auswählen.')
-      return
-    }
-
-    if (!bezugId) {
-      setFehler('Bitte einen Bezug auswählen.')
-      return
-    }
-
-    setLaedt(true)
-
-    const dateiname = `${Date.now()}-${datei.name}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('dokumente')
-      .upload(dateiname, datei)
-
-    if (uploadError) {
-      setLaedt(false)
-      setFehler(uploadError.message)
-      return
-    }
-
-    const { error: insertError } = await supabase.from('dokumente').insert({
-      titel,
-      dateiname: datei.name,
-      dateipfad: dateiname,
-      dateityp: datei.type || null,
-      bezug_typ: bezugTyp,
-      bezug_id: bezugId,
+      return [
+        d.dateiname,
+        d.bereich,
+        d.datensatz_id,
+        d.hochgeladen_von_name,
+        d.bemerkung,
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
     })
-
-    setLaedt(false)
-
-    if (insertError) {
-      setFehler(insertError.message)
-      return
-    }
-
-    setTitel('')
-    setBezugTyp('kunde')
-    setBezugId('')
-    setDatei(null)
-
-    ladeAlles()
-  }
-
-  function aktuelleBezuege() {
-    if (bezugTyp === 'kunde') return kunden
-    if (bezugTyp === 'fahrzeug') return fahrzeuge
-    if (bezugTyp === 'mitarbeiter') return mitarbeiter
-    return []
-  }
-
-  function bezugAnzeigen(dokument: Dokument) {
-    if (dokument.bezug_typ === 'kunde') {
-      const kunde = kunden.find((k) => k.id === dokument.bezug_id)
-      return kunde
-        ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
-        : 'Unbekannter Kunde'
-    }
-
-    if (dokument.bezug_typ === 'fahrzeug') {
-      const fahrzeug = fahrzeuge.find((f) => f.id === dokument.bezug_id)
-      return fahrzeug
-        ? `${fahrzeug.kennzeichen || '-'} – ${fahrzeug.marke || '-'} ${fahrzeug.modell || '-'}`
-        : 'Unbekanntes Fahrzeug'
-    }
-
-    if (dokument.bezug_typ === 'mitarbeiter') {
-      const person = mitarbeiter.find((m) => m.id === dokument.bezug_id)
-      return person
-        ? `${person.vorname} ${person.nachname}`
-        : 'Unbekannter Mitarbeiter'
-    }
-
-    return '-'
-  }
-
-  function dateiUrl(dateipfad: string) {
-    const { data } = supabase.storage.from('dokumente').getPublicUrl(dateipfad)
-    return data.publicUrl
-  }
+  }, [dokumente, suche, bereich])
 
   return (
     <div className="page-card">
-      <h1>Dokumente</h1>
+      <h1>Dokumentenmodul</h1>
+      <p>Gesamtübersicht aller hochgeladenen Dateien und Dokumente im System.</p>
 
-      <form onSubmit={dokumentAnlegen} style={{ marginBottom: 24 }}>
-        <div className="form-row">
-          <input
-            placeholder="Titel"
-            value={titel}
-            onChange={(e) => setTitel(e.target.value)}
-            style={{ minWidth: 220 }}
-          />
-
-          <select
-            value={bezugTyp}
-            onChange={(e) => {
-              setBezugTyp(e.target.value)
-              setBezugId('')
-            }}
-            style={{ minWidth: 180 }}
-          >
-            <option value="kunde">Kunde</option>
-            <option value="fahrzeug">Fahrzeug</option>
-            <option value="mitarbeiter">Mitarbeiter</option>
-          </select>
-
-          <select
-            value={bezugId}
-            onChange={(e) => setBezugId(e.target.value)}
-            style={{ minWidth: 260 }}
-          >
-            <option value="">Bezug auswählen</option>
-
-            {bezugTyp === 'kunde' &&
-              kunden.map((kunde) => (
-                <option key={kunde.id} value={kunde.id}>
-                  {kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()}
-                </option>
-              ))}
-
-            {bezugTyp === 'fahrzeug' &&
-              fahrzeuge.map((fahrzeug) => (
-                <option key={fahrzeug.id} value={fahrzeug.id}>
-                  {fahrzeug.kennzeichen || '-'} – {fahrzeug.marke || '-'} {fahrzeug.modell || '-'}
-                </option>
-              ))}
-
-            {bezugTyp === 'mitarbeiter' &&
-              mitarbeiter.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.vorname} {person.nachname}
-                </option>
-              ))}
-          </select>
-
-          <input
-            type="file"
-            onChange={(e) => setDatei(e.target.files?.[0] || null)}
-            style={{ minWidth: 260 }}
-          />
-
-          <button type="submit" disabled={laedt}>
-            {laedt ? 'Lädt hoch...' : 'Dokument hochladen'}
-          </button>
-        </div>
-      </form>
-
-      <div>
-        {dokumente.map((dokument) => (
-          <div key={dokument.id} className="list-box">
-            <strong>{dokument.titel}</strong>
-            <br />
-            Datei: {dokument.dateiname}
-            <br />
-            Typ: {dokument.dateityp || '-'}
-            <br />
-            Bezug: {dokument.bezug_typ || '-'} – {bezugAnzeigen(dokument)}
-            <br />
-            <a
-              href={dateiUrl(dokument.dateipfad)}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: '#2563eb', fontWeight: 600 }}
-            >
-              Dokument öffnen
-            </a>
-          </div>
-        ))}
+      <div className="form-row" style={{ marginBottom: 16 }}>
+        <input
+          placeholder="Dokumente durchsuchen"
+          value={suche}
+          onChange={(e) => setSuche(e.target.value)}
+        />
+        <select value={bereich} onChange={(e) => setBereich(e.target.value)}>
+          <option value="alle">Alle Bereiche</option>
+          <option value="kunde">Kunde</option>
+          <option value="fahrzeug">Fahrzeug</option>
+          <option value="serviceauftrag">Serviceauftrag</option>
+          <option value="rechnung">Rechnung</option>
+        </select>
       </div>
 
-      {fehler && <div className="error-box">Fehler: {fehler}</div>}
+      {gefiltert.map((d) => (
+        <div key={d.id} className="list-box">
+          <strong>{d.dateiname}</strong>
+          <br />
+          Bereich: {d.bereich}
+          <br />
+          Datensatz: {d.datensatz_id}
+          <br />
+          Hochgeladen: {d.erstellt_am ? new Date(d.erstellt_am).toLocaleString('de-DE') : '-'}
+          <br />
+          Von: {d.hochgeladen_von_name || '-'}
+          <br />
+          Bemerkung: {d.bemerkung || '-'}
+          <div className="action-row" style={{ marginTop: 10 }}>
+            {d.public_url && (
+              <a
+                href={d.public_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-block',
+                  padding: '10px 16px',
+                  background: '#2563eb',
+                  color: 'white',
+                  borderRadius: 12,
+                  textDecoration: 'none',
+                }}
+              >
+                Öffnen
+              </a>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {gefiltert.length === 0 && <div className="muted">Keine Dokumente vorhanden.</div>}
+      {fehler && <div className="error-box">{fehler}</div>}
     </div>
   )
 }
