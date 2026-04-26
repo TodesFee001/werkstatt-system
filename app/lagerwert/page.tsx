@@ -15,7 +15,7 @@ type Lagerartikel = {
 
 export default function LagerwertPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Lager']}>
+    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Lager', 'Behördenvertreter']}>
       <LagerwertPageContent />
     </RoleGuard>
   )

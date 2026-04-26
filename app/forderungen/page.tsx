@@ -27,7 +27,7 @@ type Kunde = {
 
 export default function ForderungenPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Buchhaltung']}>
+    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Behördenvertreter']}>
       <ForderungenPageContent />
     </RoleGuard>
   )

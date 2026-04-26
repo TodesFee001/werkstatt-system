@@ -13,7 +13,7 @@ type Arbeitsplatz = {
 
 export default function ArbeitsplaetzePage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme']}>
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Behördenvertreter']}>
       <ArbeitsplaetzePageContent />
     </RoleGuard>
   )

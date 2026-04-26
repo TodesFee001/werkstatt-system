@@ -54,7 +54,7 @@ type Nachricht = {
 
 export default function BenachrichtigungenPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Lager']}>
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Lager', 'Behördenvertreter']}>
       <BenachrichtigungenPageContent />
     </RoleGuard>
   )

@@ -240,7 +240,7 @@ function SuchePageContent() {
 
 export default function SuchePage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Lager']}>
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Lager', 'Behördenvertreter']}>
       <SuchePageContent />
     </RoleGuard>
   )

@@ -35,7 +35,7 @@ type Mahnung = {
 
 export default function MahnungenPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Buchhaltung']}>
+    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Behördenvertreter']}>
       <MahnungenPageContent />
     </RoleGuard>
   )

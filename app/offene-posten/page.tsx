@@ -25,7 +25,7 @@ type Kunde = {
 
 export default function OffenePostenPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Buchhaltung']}>
+    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Behördenvertreter']}>
       <OffenePostenPageContent />
     </RoleGuard>
   )

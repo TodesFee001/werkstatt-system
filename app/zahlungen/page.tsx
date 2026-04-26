@@ -32,7 +32,7 @@ const ZAHLUNGSSTATUS = ['offen', 'teilbezahlt', 'bezahlt', 'storniert'] as const
 
 export default function ZahlungenPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Serviceannahme']}>
+    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Serviceannahme', 'Behördenvertreter']}>
       <ZahlungenPageContent />
     </RoleGuard>
   )

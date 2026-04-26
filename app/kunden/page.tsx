@@ -18,7 +18,7 @@ type Kunde = {
 
 export default function KundenPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Serviceannahme']}>
+    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Serviceannahme', 'Behördenvertreter']}>
       <KundenPageContent />
     </RoleGuard>
   )

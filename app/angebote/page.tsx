@@ -461,7 +461,7 @@ function AngebotePageContent() {
 
 export default function AngebotePage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Serviceannahme']}>
+    <RoleGuard allowedRoles={['Admin', 'Buchhaltung', 'Serviceannahme', 'Behördenvertreter']}>
       <AngebotePageContent />
     </RoleGuard>
   )

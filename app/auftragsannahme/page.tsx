@@ -27,7 +27,7 @@ type Fahrzeugcheck = {
 
 export default function AuftragsannahmePage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Serviceannahme', 'Werkstatt']}>
+    <RoleGuard allowedRoles={['Admin', 'Serviceannahme', 'Werkstatt', 'Behördenvertreter']}>
       <AuftragsannahmePageContent />
     </RoleGuard>
   )

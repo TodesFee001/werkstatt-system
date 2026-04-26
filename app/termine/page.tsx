@@ -37,7 +37,7 @@ type Arbeitsplatz = {
 
 export default function TerminePage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung']}>
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Behördenvertreter']}>
       <TerminePageContent />
     </RoleGuard>
   )

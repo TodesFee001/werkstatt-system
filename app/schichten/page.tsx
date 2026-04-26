@@ -21,7 +21,7 @@ type Schicht = {
 
 export default function SchichtenPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme']}>
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Behördenvertreter']}>
       <SchichtenPageContent />
     </RoleGuard>
   )

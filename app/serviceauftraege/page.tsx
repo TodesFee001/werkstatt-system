@@ -92,7 +92,7 @@ const AUFTRAGSARTEN = [
 
 export default function ServiceauftraegePage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung']}>
+    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Behördenvertreter']}>
       <ServiceauftraegePageContent />
     </RoleGuard>
   )

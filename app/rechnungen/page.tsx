@@ -47,7 +47,7 @@ type Rechnung = {
 
 export default function RechnungenPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Buchhaltung', 'Serviceannahme']}>
+    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Buchhaltung', 'Serviceannahme', 'Behördenvertreter']}>
       <RechnungenPageContent />
     </RoleGuard>
   )
