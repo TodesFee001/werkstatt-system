@@ -78,6 +78,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         { href: '/suche', label: 'Suche' },
         { href: '/benachrichtigungen', label: 'Benachrichtigungen' },
         { href: '/wiki', label: 'Wiki / User Guide' },
+        { href: '/mein-konto', label: 'Mein Konto' },
       ],
     }
 
@@ -136,6 +137,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         { href: '/einstellungen', label: 'Einstellungen' },
         { href: '/aktivitaetslog', label: 'Aktivitätslog' },
         { href: '/systemstatus', label: 'Systemstatus' },
+        { href: '/benutzer/passwort', label: 'Passwortverwaltung' },
       ],
     }
 
