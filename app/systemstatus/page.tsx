@@ -78,28 +78,28 @@ function SystemstatusContent() {
         <div className="kpi-pill">
           Datenbank
           <strong>
-            <StatusBadge status={dbOk ? 'fertig' : 'kritisch'} />
+            <StatusBadge status={dbOk ? 'OK' : 'kritisch'} />
           </strong>
         </div>
 
         <div className="kpi-pill">
           Storage
           <strong>
-            <StatusBadge status={storageOk ? 'fertig' : 'kritisch'} />
+            <StatusBadge status={storageOk ? 'OK' : 'kritisch'} />
           </strong>
         </div>
 
         <div className="kpi-pill">
           Lockdown
           <strong>
-            <StatusBadge status={lockdown?.aktiv ? 'kritisch' : 'fertig'} />
+            <StatusBadge status={lockdown?.aktiv ? 'Aktiv' : 'Ok'} />
           </strong>
         </div>
 
         <div className="kpi-pill">
           Wartung
           <strong>
-            <StatusBadge status={wartung?.aktiv ? 'wartet' : 'fertig'} />
+            <StatusBadge status={wartung?.aktiv ? 'Aktiv' : 'OK'} />
           </strong>
         </div>
 
