@@ -73,7 +73,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
     setLogoutLaden(false)
   }
 
-  const rolle = profil?.rolle || localStorage.getItem('werkstatt_rolle') || 'Unbekannt'
+  const rolle =
+  profil?.rolle ||
+  (typeof window !== 'undefined' ? localStorage.getItem('werkstatt_rolle') : null) ||
+  'Unbekannt'
   const istBehoerde = rolle === 'Behördenvertreter'
   const istAdmin = rolle === 'Admin'
   const istWerkstattmeister = rolle === 'Werkstattmeister'
