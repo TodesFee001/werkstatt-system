@@ -6,17 +6,38 @@ import { supabase } from '@/lib/supabase'
 
 const SEITEN = [
   { pfad: '/', name: 'Dashboard' },
+  { pfad: '/wiki', name: 'Wiki / User Guide' },
+  { pfad: '/suche', name: 'Suche' },
+  { pfad: '/benachrichtigungen', name: 'Benachrichtigungen' },
+
   { pfad: '/kunden', name: 'Kunden' },
   { pfad: '/fahrzeuge', name: 'Fahrzeuge' },
   { pfad: '/serviceauftraege', name: 'Serviceaufträge' },
+  { pfad: '/auftragsannahme', name: 'Auftragsannahme' },
+
   { pfad: '/termine', name: 'Termine' },
   { pfad: '/kalender', name: 'Kalender / Planung' },
+  { pfad: '/arbeitsplaetze', name: 'Arbeitsplätze' },
+  { pfad: '/schichten', name: 'Schichten' },
+
   { pfad: '/lager', name: 'Lager' },
+  { pfad: '/lagerwert', name: 'Lagerwert' },
+  { pfad: '/lagerbewegungen', name: 'Lagerbewegungen' },
+
+  { pfad: '/angebote', name: 'Angebote' },
   { pfad: '/rechnungen', name: 'Rechnungen' },
   { pfad: '/zahlungen', name: 'Zahlungen' },
+  { pfad: '/offene-posten', name: 'Offene Posten' },
   { pfad: '/forderungen', name: 'Forderungen' },
   { pfad: '/mahnungen', name: 'Mahnungen' },
   { pfad: '/dokumente', name: 'Dokumente' },
+
+  { pfad: '/firmenprofil', name: 'Firmenprofil' },
+  { pfad: '/benutzer', name: 'Benutzer' },
+  { pfad: '/einstellungen', name: 'Einstellungen' },
+  { pfad: '/logs', name: 'Aktivitätslog' },
+  { pfad: '/aktivitaetslog', name: 'Aktivitätslog Alt/Neu' },
+  { pfad: '/systemstatus', name: 'Systemstatus' },
 ]
 
 type Modus = {
@@ -70,7 +91,6 @@ function EinstellungenPageContent() {
     setMeldung('')
 
     const neu = !lockdown?.aktiv
-
     const sessionRes = await supabase.auth.getSession()
     const userId = sessionRes.data.session?.user?.id || null
 
@@ -97,8 +117,17 @@ function EinstellungenPageContent() {
       if (prev.includes(pfad)) {
         return prev.filter((p) => p !== pfad)
       }
+
       return [...prev, pfad]
     })
+  }
+
+  function alleSeitenAuswaehlen() {
+    setWartungsSeiten(SEITEN.map((s) => s.pfad))
+  }
+
+  function alleSeitenEntfernen() {
+    setWartungsSeiten([])
   }
 
   async function wartungSpeichern(aktiv: boolean) {
@@ -112,7 +141,7 @@ function EinstellungenPageContent() {
       .from('system_modus')
       .update({
         aktiv,
-        seiten: wartungsSeiten,
+        seiten: aktiv ? wartungsSeiten : [],
         aktualisiert_am: new Date().toISOString(),
         aktualisiert_von: userId,
       })
@@ -141,9 +170,7 @@ function EinstellungenPageContent() {
 
       <div className="page-card">
         <h2 style={{ marginTop: 0 }}>Lockdown-Modus</h2>
-        <p>
-          Sperrt das komplette System für alle Rollen außer Admin.
-        </p>
+        <p>Sperrt das komplette System für alle Rollen außer Admin.</p>
 
         <div
           className="list-box"
@@ -170,14 +197,13 @@ function EinstellungenPageContent() {
 
       <div className="page-card">
         <h2 style={{ marginTop: 0 }}>Wartungsmodus</h2>
-        <p>
-          Einzelne Seiten können gezielt in Wartung gesetzt werden.
-        </p>
+        <p>Einzelne Seiten können gezielt in Wartung gesetzt werden.</p>
 
         <div className="list-box">
           Status: <strong>{wartung?.aktiv ? 'AKTIV' : 'INAKTIV'}</strong>
           <br />
-          Seiten: {(wartung?.seiten || []).length > 0 ? (wartung?.seiten || []).join(', ') : '-'}
+          Gesperrte Seiten:{' '}
+          {(wartung?.seiten || []).length > 0 ? (wartung?.seiten || []).join(', ') : '-'}
         </div>
 
         <div className="action-row">
@@ -193,7 +219,16 @@ function EinstellungenPageContent() {
             <h2 style={{ marginTop: 0 }}>Wartungsmodus verwalten</h2>
             <p>Wähle die Seiten aus, die gesperrt werden sollen.</p>
 
-            <div style={{ display: 'grid', gap: 10 }}>
+            <div className="action-row">
+              <button type="button" onClick={alleSeitenAuswaehlen}>
+                Alle Seiten auswählen
+              </button>
+              <button type="button" onClick={alleSeitenEntfernen} style={{ background: '#6b7280' }}>
+                Auswahl leeren
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
               {SEITEN.map((s) => (
                 <label key={s.pfad} className="maintenance-option">
                   <input
