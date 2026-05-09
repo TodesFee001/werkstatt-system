@@ -5,7 +5,9 @@ import { useParams } from 'next/navigation'
 import AttachmentManager from '../../components/AttachmentManager'
 import RoleGuard from '../../components/RoleGuard'
 import StatusBadge from '../../components/StatusBadge'
+import ServiceTimeline from '../../components/ServiceTimeline'
 import { supabase } from '@/lib/supabase'
+import { timelineEintrag } from '@/lib/timeline'
 
 type Serviceauftrag = {
   id: string
@@ -48,7 +50,16 @@ type Material = {
   einzelpreis: number | null
 }
 
-const STATUS = ['offen', 'angenommen', 'in_arbeit', 'wartet', 'wartet_auf_freigabe', 'fertig', 'abgeschlossen', 'archiviert']
+const STATUS = [
+  'offen',
+  'angenommen',
+  'in_arbeit',
+  'wartet',
+  'wartet_auf_freigabe',
+  'fertig',
+  'abgeschlossen',
+  'archiviert',
+]
 
 export default function ServiceauftragDetailPage() {
   return (
@@ -176,6 +187,13 @@ function ServiceauftragDetailPageContent() {
       return
     }
 
+    await timelineEintrag(
+      id,
+      'bearbeitung',
+      'Auftrag aktualisiert',
+      'Auftragsdaten, Status oder Fahrzeugannahme wurden bearbeitet.'
+    )
+
     setMeldung('Serviceauftrag wurde gespeichert.')
     laden()
   }
@@ -196,6 +214,13 @@ function ServiceauftragDetailPageContent() {
       return
     }
 
+    await timelineEintrag(
+      id,
+      'arbeitszeit',
+      'Arbeitszeit hinzugefügt',
+      `${azBeschreibung || 'Arbeitszeit'} · ${azStunden || 0} Std. · ${azSatz || 0} €/Std.`
+    )
+
     setAzBeschreibung('')
     setAzStunden('')
     setAzSatz('')
@@ -207,12 +232,21 @@ function ServiceauftragDetailPageContent() {
     const ok = window.confirm('Arbeitszeit wirklich löschen?')
     if (!ok) return
 
+    const az = arbeitszeiten.find((x) => x.id === azId)
+
     const { error } = await supabase.from('serviceauftrag_arbeitszeiten').delete().eq('id', azId)
 
     if (error) {
       setFehler(error.message)
       return
     }
+
+    await timelineEintrag(
+      id,
+      'arbeitszeit',
+      'Arbeitszeit gelöscht',
+      `${az?.beschreibung || 'Arbeitszeit'} wurde entfernt.`
+    )
 
     setMeldung('Arbeitszeit wurde gelöscht.')
     laden()
@@ -234,6 +268,13 @@ function ServiceauftragDetailPageContent() {
       return
     }
 
+    await timelineEintrag(
+      id,
+      'material',
+      'Material hinzugefügt',
+      `${matBezeichnung || 'Material'} · Menge ${matMenge || 0} · ${matPreis || 0} €/Stk.`
+    )
+
     setMatBezeichnung('')
     setMatMenge('')
     setMatPreis('')
@@ -245,6 +286,8 @@ function ServiceauftragDetailPageContent() {
     const ok = window.confirm('Material wirklich löschen?')
     if (!ok) return
 
+    const mat = materialien.find((x) => x.id === matId)
+
     const { error } = await supabase.from('serviceauftrag_material').delete().eq('id', matId)
 
     if (error) {
@@ -252,12 +295,31 @@ function ServiceauftragDetailPageContent() {
       return
     }
 
+    await timelineEintrag(
+      id,
+      'material',
+      'Material gelöscht',
+      `${mat?.bezeichnung || 'Material'} wurde entfernt.`
+    )
+
     setMeldung('Material wurde gelöscht.')
     laden()
   }
 
-  const arbeitskosten = useMemo(() => arbeitszeiten.reduce((s, a) => s + Number(a.stunden || 0) * Number(a.stundensatz || 0), 0), [arbeitszeiten])
-  const materialkosten = useMemo(() => materialien.reduce((s, m) => s + Number(m.menge || 0) * Number(m.einzelpreis || 0), 0), [materialien])
+  const arbeitskosten = useMemo(() => {
+    return arbeitszeiten.reduce(
+      (s, a) => s + Number(a.stunden || 0) * Number(a.stundensatz || 0),
+      0
+    )
+  }, [arbeitszeiten])
+
+  const materialkosten = useMemo(() => {
+    return materialien.reduce(
+      (s, m) => s + Number(m.menge || 0) * Number(m.einzelpreis || 0),
+      0
+    )
+  }, [materialien])
+
   const gesamt = arbeitskosten + materialkosten
 
   async function abschliessenUndRechnungErstellen() {
@@ -287,12 +349,22 @@ function ServiceauftragDetailPageContent() {
       return
     }
 
-    const { error: sError } = await supabase.from('serviceauftraege').update({ status: 'abgeschlossen' }).eq('id', id)
+    const { error: sError } = await supabase
+      .from('serviceauftraege')
+      .update({ status: 'abgeschlossen' })
+      .eq('id', id)
 
     if (sError) {
       setFehler(sError.message)
       return
     }
+
+    await timelineEintrag(
+      id,
+      'rechnung',
+      'Auftrag abgeschlossen und Rechnung erstellt',
+      `Rechnung ${rechnungsnummer} wurde automatisch aus dem Serviceauftrag erstellt.`
+    )
 
     setMeldung('Auftrag wurde abgeschlossen und Rechnung wurde erstellt.')
     laden()
@@ -303,12 +375,15 @@ function ServiceauftragDetailPageContent() {
       <div className="topbar">
         <div>
           <h1 className="topbar-title">Serviceauftrag bearbeiten</h1>
-          <div className="topbar-subtitle">Arbeitszeit, Material, Annahme/Fahrzeugcheck und Rechnungserstellung.</div>
+          <div className="topbar-subtitle">
+            Arbeitszeit, Material, Annahme/Fahrzeugcheck, Timeline und Rechnungserstellung.
+          </div>
         </div>
       </div>
 
       <div className="page-card">
         <h2 style={{ marginTop: 0 }}>Auftragsdaten</h2>
+
         {auftrag && (
           <div className="list-box">
             <strong>{auftrag.art || '-'}</strong>
@@ -325,9 +400,19 @@ function ServiceauftragDetailPageContent() {
 
         <div className="form-row">
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
+            {STATUS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
-          <input placeholder="Kilometerstand bei Annahme" value={kilometerstand} onChange={(e) => setKilometerstand(e.target.value)} />
+
+          <input
+            placeholder="Kilometerstand bei Annahme"
+            value={kilometerstand}
+            onChange={(e) => setKilometerstand(e.target.value)}
+          />
+
           <select value={tankstand} onChange={(e) => setTankstand(e.target.value)}>
             <option value="leer">Tankfüllung: leer</option>
             <option value="1/4">Tankfüllung: 1/4</option>
@@ -340,18 +425,23 @@ function ServiceauftragDetailPageContent() {
         <div style={{ marginTop: 12 }}>
           <textarea placeholder="Fehlerbeschreibung" value={fehlerbeschreibung} onChange={(e) => setFehlerbeschreibung(e.target.value)} />
         </div>
+
         <div style={{ marginTop: 12 }}>
           <textarea placeholder="Außencheck" value={aussencheck} onChange={(e) => setAussencheck(e.target.value)} />
         </div>
+
         <div style={{ marginTop: 12 }}>
           <textarea placeholder="Innencheck" value={innencheck} onChange={(e) => setInnencheck(e.target.value)} />
         </div>
+
         <div style={{ marginTop: 12 }}>
           <textarea placeholder="Schäden" value={schaeden} onChange={(e) => setSchaeden(e.target.value)} />
         </div>
+
         <div style={{ marginTop: 12 }}>
           <textarea placeholder="Zubehör" value={zubehoer} onChange={(e) => setZubehoer(e.target.value)} />
         </div>
+
         <div style={{ marginTop: 12 }}>
           <textarea placeholder="Interne Notiz" value={interneNotiz} onChange={(e) => setInterneNotiz(e.target.value)} />
         </div>
@@ -362,7 +452,10 @@ function ServiceauftragDetailPageContent() {
         </div>
 
         <div className="action-row">
-          <button type="button" onClick={auftragSpeichern}>Auftrag speichern</button>
+          <button type="button" onClick={auftragSpeichern}>
+            Auftrag speichern
+          </button>
+
           <button type="button" onClick={abschliessenUndRechnungErstellen} style={{ background: '#16a34a' }}>
             Auftrag abschließen und Rechnung erstellen
           </button>
@@ -371,13 +464,17 @@ function ServiceauftragDetailPageContent() {
 
       <div className="page-card">
         <h2 style={{ marginTop: 0 }}>Arbeitszeit hinzufügen</h2>
+
         <div className="form-row">
           <input placeholder="Beschreibung" value={azBeschreibung} onChange={(e) => setAzBeschreibung(e.target.value)} />
           <input placeholder="Stunden" value={azStunden} onChange={(e) => setAzStunden(e.target.value)} />
           <input placeholder="Stundensatz" value={azSatz} onChange={(e) => setAzSatz(e.target.value)} />
         </div>
+
         <div className="action-row">
-          <button type="button" onClick={arbeitszeitHinzufuegen}>Arbeitszeit hinzufügen</button>
+          <button type="button" onClick={arbeitszeitHinzufuegen}>
+            Arbeitszeit hinzufügen
+          </button>
         </div>
 
         {arbeitszeiten.map((a) => (
@@ -387,8 +484,11 @@ function ServiceauftragDetailPageContent() {
             {Number(a.stunden || 0).toFixed(2)} Std. × {Number(a.stundensatz || 0).toFixed(2)} €
             <br />
             Summe: {(Number(a.stunden || 0) * Number(a.stundensatz || 0)).toFixed(2)} €
+
             <div className="action-row">
-              <button type="button" onClick={() => arbeitszeitLoeschen(a.id)} style={{ background: '#dc2626' }}>Löschen</button>
+              <button type="button" onClick={() => arbeitszeitLoeschen(a.id)} style={{ background: '#dc2626' }}>
+                Löschen
+              </button>
             </div>
           </div>
         ))}
@@ -396,13 +496,17 @@ function ServiceauftragDetailPageContent() {
 
       <div className="page-card">
         <h2 style={{ marginTop: 0 }}>Material hinzufügen</h2>
+
         <div className="form-row">
           <input placeholder="Bezeichnung" value={matBezeichnung} onChange={(e) => setMatBezeichnung(e.target.value)} />
           <input placeholder="Menge" value={matMenge} onChange={(e) => setMatMenge(e.target.value)} />
           <input placeholder="Einzelpreis" value={matPreis} onChange={(e) => setMatPreis(e.target.value)} />
         </div>
+
         <div className="action-row">
-          <button type="button" onClick={materialHinzufuegen}>Material hinzufügen</button>
+          <button type="button" onClick={materialHinzufuegen}>
+            Material hinzufügen
+          </button>
         </div>
 
         {materialien.map((m) => (
@@ -412,8 +516,11 @@ function ServiceauftragDetailPageContent() {
             {Number(m.menge || 0).toFixed(2)} × {Number(m.einzelpreis || 0).toFixed(2)} €
             <br />
             Summe: {(Number(m.menge || 0) * Number(m.einzelpreis || 0)).toFixed(2)} €
+
             <div className="action-row">
-              <button type="button" onClick={() => materialLoeschen(m.id)} style={{ background: '#dc2626' }}>Löschen</button>
+              <button type="button" onClick={() => materialLoeschen(m.id)} style={{ background: '#dc2626' }}>
+                Löschen
+              </button>
             </div>
           </div>
         ))}
@@ -426,7 +533,13 @@ function ServiceauftragDetailPageContent() {
         <div className="kpi-pill">Brutto 19%<strong>{(gesamt * 1.19).toFixed(2)} €</strong></div>
       </div>
 
-      <AttachmentManager bereich="serviceauftrag" datensatzId={id} titel={auftrag ? auftrag.art || auftrag.id : 'Serviceauftrag'} />
+      <ServiceTimeline serviceauftragId={id} />
+
+      <AttachmentManager
+        bereich="serviceauftrag"
+        datensatzId={id}
+        titel={auftrag ? auftrag.art || auftrag.id : 'Serviceauftrag'}
+      />
 
       {meldung && <div className="badge badge-success">{meldung}</div>}
       {fehler && <div className="error-box">{fehler}</div>}

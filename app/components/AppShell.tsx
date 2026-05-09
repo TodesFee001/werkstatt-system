@@ -109,6 +109,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       items: [
         { href: '/lager', label: 'Lager' },
         { href: '/lagerwert', label: 'Lagerwert' },
+        { href: '/lagerbewegungen', label: 'Lagerbewegungen' },
       ],
     }
 
@@ -134,6 +135,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         { href: '/benutzer', label: 'Benutzer' },
         { href: '/einstellungen', label: 'Einstellungen' },
         { href: '/aktivitaetslog', label: 'Aktivitätslog' },
+        { href: '/systemstatus', label: 'Systemstatus' },
       ],
     }
 
