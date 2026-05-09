@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import RoleGuard from '../components/RoleGuard'
 import { supabase } from '@/lib/supabase'
+import { softDeleteDatensatz } from '@/lib/soft-delete'
+import { useRealtimeTable } from '@/lib/useRealtimeTable'
 
 type Kunde = {
   id: string
@@ -49,10 +51,10 @@ function FahrzeugePageContent() {
   const [meldung, setMeldung] = useState('')
   const [fehler, setFehler] = useState('')
 
-  async function laden() {
+  const laden = useCallback(async () => {
     const [fRes, kRes] = await Promise.all([
-      supabase.from('fahrzeuge').select('*').order('kennzeichen'),
-      supabase.from('kunden').select('*').order('firmenname'),
+      supabase.from('fahrzeuge').select('*').eq('ist_geloescht', false).order('kennzeichen'),
+      supabase.from('kunden').select('*').eq('ist_geloescht', false).order('firmenname'),
     ])
 
     if (fRes.error || kRes.error) {
@@ -62,11 +64,14 @@ function FahrzeugePageContent() {
 
     setFahrzeuge((fRes.data || []) as Fahrzeug[])
     setKunden((kRes.data || []) as Kunde[])
-  }
+  }, [])
 
   useEffect(() => {
     laden()
-  }, [])
+  }, [laden])
+
+  useRealtimeTable('fahrzeuge', laden)
+  useRealtimeTable('kunden', laden)
 
   function kundenName(id: string | null) {
     const k = kunden.find((x) => x.id === id)
@@ -134,11 +139,6 @@ function FahrzeugePageContent() {
       return
     }
 
-    if (!kennzeichen.trim()) {
-      setFehler('Bitte Kennzeichen eingeben.')
-      return
-    }
-
     const payload = {
       kunde_id: kundeId,
       kennzeichen: kennzeichen || null,
@@ -147,6 +147,7 @@ function FahrzeugePageContent() {
       fahrgestellnummer: fahrgestellnummer || null,
       farbe: farbe || null,
       kilometerstand: kilometerstand ? Number(kilometerstand) : null,
+      ist_geloescht: false,
     }
 
     const res = bearbeitenId
@@ -163,19 +164,22 @@ function FahrzeugePageContent() {
     laden()
   }
 
-  async function loeschen(id: string) {
-    const ok = window.confirm('Fahrzeug wirklich löschen?')
+  async function loeschen(f: Fahrzeug) {
+    const ok = window.confirm('Fahrzeug wirklich archivieren? Es wird nicht endgültig gelöscht.')
     if (!ok) return
 
-    const { error } = await supabase.from('fahrzeuge').delete().eq('id', id)
+    try {
+      await softDeleteDatensatz({
+        tabelle: 'fahrzeuge',
+        id: f.id,
+        titel: `${f.kennzeichen || '-'} ${f.marke || ''} ${f.modell || ''}`.trim(),
+      })
 
-    if (error) {
-      setFehler(error.message)
-      return
+      setMeldung('Fahrzeug wurde archiviert.')
+      laden()
+    } catch (err) {
+      setFehler(err instanceof Error ? err.message : 'Fehler beim Archivieren.')
     }
-
-    setMeldung('Fahrzeug wurde gelöscht.')
-    laden()
   }
 
   return (
@@ -183,7 +187,7 @@ function FahrzeugePageContent() {
       <div className="topbar">
         <div>
           <h1 className="topbar-title">Fahrzeuge</h1>
-          <div className="topbar-subtitle">Fahrzeuge mit integrierter Kundensuche und direkter Kundenauswahl.</div>
+          <div className="topbar-subtitle">Fahrzeuge mit Soft Delete und Kundensuche.</div>
         </div>
       </div>
 
@@ -217,7 +221,6 @@ function FahrzeugePageContent() {
                 {kundenName(k.id)}
               </button>
             ))}
-            {kundenGefiltert.length === 0 && <div className="muted">Kein Kunde gefunden.</div>}
           </div>
         )}
 
@@ -258,14 +261,11 @@ function FahrzeugePageContent() {
               <br />
               Kilometerstand: {f.kilometerstand ?? '-'}
               <div className="action-row">
-                <Link
-                  href={`/fahrzeuge/${f.id}`}
-                  style={{ padding: '10px 16px', background: '#2563eb', color: 'white', borderRadius: 12, textDecoration: 'none' }}
-                >
+                <Link href={`/fahrzeuge/${f.id}`} className="button-link">
                   Fahrzeugakte
                 </Link>
                 <button type="button" onClick={() => bearbeitenStarten(f)}>Bearbeiten</button>
-                <button type="button" onClick={() => loeschen(f.id)} style={{ background: '#dc2626' }}>Löschen</button>
+                <button type="button" onClick={() => loeschen(f)} style={{ background: '#dc2626' }}>Archivieren</button>
               </div>
             </div>
           ))}

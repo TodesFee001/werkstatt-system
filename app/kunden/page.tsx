@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import RoleGuard from '../components/RoleGuard'
 import { supabase } from '@/lib/supabase'
 import { logAktion } from '@/lib/activity-log'
+import { softDeleteDatensatz } from '@/lib/soft-delete'
+import { useRealtimeTable } from '@/lib/useRealtimeTable'
 
 type Kunde = {
   id: string
@@ -14,11 +17,12 @@ type Kunde = {
   email: string | null
   adresse: string | null
   interne_notiz: string | null
+  ist_geloescht: boolean | null
 }
 
 export default function KundenPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Serviceannahme', 'Behördenvertreter']}>
+    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Serviceannahme', 'Buchhaltung', 'Behördenvertreter']}>
       <KundenPageContent />
     </RoleGuard>
   )
@@ -37,14 +41,15 @@ function KundenPageContent() {
   const [notiz, setNotiz] = useState('')
 
   const [bearbeitenId, setBearbeitenId] = useState<string | null>(null)
-
   const [meldung, setMeldung] = useState('')
   const [fehler, setFehler] = useState('')
+  const [letzteAktualisierung, setLetzteAktualisierung] = useState('')
 
-  async function laden() {
+  const laden = useCallback(async () => {
     const { data, error } = await supabase
       .from('kunden')
       .select('*')
+      .eq('ist_geloescht', false)
       .order('firmenname')
 
     if (error) {
@@ -52,21 +57,32 @@ function KundenPageContent() {
       return
     }
 
-    setKunden(data || [])
-  }
+    setKunden((data || []) as Kunde[])
+    setLetzteAktualisierung(new Date().toLocaleTimeString('de-DE'))
+  }, [])
 
   useEffect(() => {
     laden()
-  }, [])
+  }, [laden])
 
-  function kundenName(k: Kunde) {
-    return k.firmenname || `${k.vorname || ''} ${k.nachname || ''}`.trim()
+  useRealtimeTable('kunden', laden)
+
+  function kundenName(k: Partial<Kunde>) {
+    return k.firmenname || `${k.vorname || ''} ${k.nachname || ''}`.trim() || 'Unbenannter Kunde'
   }
 
   const gefiltert = useMemo(() => {
     const q = suche.toLowerCase()
+
     return kunden.filter((k) =>
-      kundenName(k).toLowerCase().includes(q)
+      [
+        kundenName(k),
+        k.telefon,
+        k.email,
+        k.adresse,
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
     )
   }, [kunden, suche])
 
@@ -105,9 +121,8 @@ function KundenPageContent() {
       email: email || null,
       adresse: adresse || null,
       interne_notiz: notiz || null,
+      ist_geloescht: false,
     }
-
-    let id = bearbeitenId
 
     if (bearbeitenId) {
       const { error } = await supabase
@@ -120,14 +135,7 @@ function KundenPageContent() {
         return
       }
 
-      await logAktion(
-        'kunden',
-        'bearbeitet',
-        bearbeitenId,
-        kundenName(payload as any),
-        { neueDaten: payload }
-      )
-
+      await logAktion('kunden', 'bearbeitet', bearbeitenId, kundenName(payload), { neueDaten: payload })
       setMeldung('Kunde wurde aktualisiert.')
     } else {
       const { data, error } = await supabase
@@ -141,16 +149,7 @@ function KundenPageContent() {
         return
       }
 
-      id = data.id
-
-      await logAktion(
-        'kunden',
-        'erstellt',
-        id,
-        kundenName(payload as any),
-        payload
-      )
-
+      await logAktion('kunden', 'erstellt', data.id, kundenName(payload), payload)
       setMeldung('Kunde wurde erstellt.')
     }
 
@@ -159,35 +158,33 @@ function KundenPageContent() {
   }
 
   async function loeschen(k: Kunde) {
-    const ok = window.confirm('Kunde wirklich löschen?')
+    const ok = window.confirm('Kunde wirklich archivieren? Er wird nicht endgültig gelöscht.')
     if (!ok) return
 
-    const { error } = await supabase
-      .from('kunden')
-      .delete()
-      .eq('id', k.id)
+    try {
+      await softDeleteDatensatz({
+        tabelle: 'kunden',
+        id: k.id,
+        titel: kundenName(k),
+      })
 
-    if (error) {
-      setFehler(error.message)
-      return
+      setMeldung('Kunde wurde archiviert.')
+      laden()
+    } catch (err) {
+      setFehler(err instanceof Error ? err.message : 'Fehler beim Archivieren.')
     }
-
-    await logAktion(
-      'kunden',
-      'geloescht',
-      k.id,
-      kundenName(k),
-      {}
-    )
-
-    setMeldung('Kunde wurde gelöscht.')
-    laden()
   }
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       <div className="topbar">
-        <h1 className="topbar-title">Kunden</h1>
+        <div>
+          <h1 className="topbar-title">Kunden</h1>
+          <div className="topbar-subtitle">
+            Kundenverwaltung mit Soft Delete.
+            {letzteAktualisierung && <> Letzte Aktualisierung: {letzteAktualisierung}</>}
+          </div>
+        </div>
       </div>
 
       <form onSubmit={speichern} className="page-card">
@@ -216,12 +213,10 @@ function KundenPageContent() {
         />
 
         <div className="action-row">
-          <button type="submit">
-            {bearbeitenId ? 'Speichern' : 'Erstellen'}
-          </button>
+          <button type="submit">{bearbeitenId ? 'Speichern' : 'Erstellen'}</button>
 
           {bearbeitenId && (
-            <button type="button" onClick={resetForm}>
+            <button type="button" onClick={resetForm} style={{ background: '#6b7280' }}>
               Abbrechen
             </button>
           )}
@@ -241,13 +236,20 @@ function KundenPageContent() {
             <br />
             {k.telefon || '-'} | {k.email || '-'}
             <div className="action-row">
-              <button onClick={() => bearbeitenStarten(k)}>Bearbeiten</button>
-              <button onClick={() => loeschen(k)} style={{ background: '#dc2626' }}>
-                Löschen
+              <Link href={`/kunden/${k.id}`} className="button-link">
+                Kundenakte
+              </Link>
+              <button type="button" onClick={() => bearbeitenStarten(k)}>
+                Bearbeiten
+              </button>
+              <button type="button" onClick={() => loeschen(k)} style={{ background: '#dc2626' }}>
+                Archivieren
               </button>
             </div>
           </div>
         ))}
+
+        {gefiltert.length === 0 && <div className="muted">Keine Kunden vorhanden.</div>}
       </div>
 
       {meldung && <div className="badge badge-success">{meldung}</div>}
