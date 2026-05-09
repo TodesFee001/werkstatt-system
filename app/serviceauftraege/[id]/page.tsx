@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import AttachmentManager from '../../components/AttachmentManager'
 import RoleGuard from '../../components/RoleGuard'
@@ -8,6 +8,7 @@ import StatusBadge from '../../components/StatusBadge'
 import ServiceTimeline from '../../components/ServiceTimeline'
 import { supabase } from '@/lib/supabase'
 import { timelineEintrag } from '@/lib/timeline'
+import { useRealtimeTable } from '@/lib/useRealtimeTable'
 
 type Serviceauftrag = {
   id: string
@@ -102,8 +103,9 @@ function ServiceauftragDetailPageContent() {
 
   const [meldung, setMeldung] = useState('')
   const [fehler, setFehler] = useState('')
+  const [letzteAktualisierung, setLetzteAktualisierung] = useState('')
 
-  async function laden() {
+  const laden = useCallback(async () => {
     const auftragRes = await supabase.from('serviceauftraege').select('*').eq('id', id).maybeSingle()
 
     if (auftragRes.error) {
@@ -131,16 +133,22 @@ function ServiceauftragDetailPageContent() {
     if (a?.kunde_id) {
       const res = await supabase.from('kunden').select('*').eq('id', a.kunde_id).maybeSingle()
       if (!res.error) setKunde((res.data as Kunde | null) || null)
+    } else {
+      setKunde(null)
     }
 
     if (a?.fahrzeug_id) {
       const res = await supabase.from('fahrzeuge').select('*').eq('id', a.fahrzeug_id).maybeSingle()
       if (!res.error) setFahrzeug((res.data as Fahrzeug | null) || null)
+    } else {
+      setFahrzeug(null)
     }
 
     if (a?.mitarbeiter_id) {
       const res = await supabase.from('mitarbeiter').select('*').eq('id', a.mitarbeiter_id).maybeSingle()
       if (!res.error) setMitarbeiter((res.data as Mitarbeiter | null) || null)
+    } else {
+      setMitarbeiter(null)
     }
 
     const [azRes, matRes] = await Promise.all([
@@ -155,11 +163,17 @@ function ServiceauftragDetailPageContent() {
 
     setArbeitszeiten((azRes.data || []) as Arbeitszeit[])
     setMaterialien((matRes.data || []) as Material[])
-  }
+    setLetzteAktualisierung(new Date().toLocaleTimeString('de-DE'))
+  }, [id])
 
   useEffect(() => {
     laden()
-  }, [id])
+  }, [laden])
+
+  useRealtimeTable('serviceauftraege', laden)
+  useRealtimeTable('serviceauftrag_material', laden)
+  useRealtimeTable('serviceauftrag_arbeitszeiten', laden)
+  useRealtimeTable('serviceauftrag_timeline', laden)
 
   async function auftragSpeichern() {
     setFehler('')
@@ -376,7 +390,8 @@ function ServiceauftragDetailPageContent() {
         <div>
           <h1 className="topbar-title">Serviceauftrag bearbeiten</h1>
           <div className="topbar-subtitle">
-            Arbeitszeit, Material, Annahme/Fahrzeugcheck, Timeline und Rechnungserstellung.
+            Live-Detailansicht mit Arbeitszeit, Material, Fahrzeugannahme, Timeline und Rechnungserstellung.
+            {letzteAktualisierung && <> Letzte Aktualisierung: {letzteAktualisierung}</>}
           </div>
         </div>
       </div>
@@ -527,10 +542,22 @@ function ServiceauftragDetailPageContent() {
       </div>
 
       <div className="kpi-strip">
-        <div className="kpi-pill">Arbeitskosten<strong>{arbeitskosten.toFixed(2)} €</strong></div>
-        <div className="kpi-pill">Materialkosten<strong>{materialkosten.toFixed(2)} €</strong></div>
-        <div className="kpi-pill">Netto Gesamt<strong>{gesamt.toFixed(2)} €</strong></div>
-        <div className="kpi-pill">Brutto 19%<strong>{(gesamt * 1.19).toFixed(2)} €</strong></div>
+        <div className="kpi-pill">
+          Arbeitskosten
+          <strong>{arbeitskosten.toFixed(2)} €</strong>
+        </div>
+        <div className="kpi-pill">
+          Materialkosten
+          <strong>{materialkosten.toFixed(2)} €</strong>
+        </div>
+        <div className="kpi-pill">
+          Netto Gesamt
+          <strong>{gesamt.toFixed(2)} €</strong>
+        </div>
+        <div className="kpi-pill">
+          Brutto 19%
+          <strong>{(gesamt * 1.19).toFixed(2)} €</strong>
+        </div>
       </div>
 
       <ServiceTimeline serviceauftragId={id} />

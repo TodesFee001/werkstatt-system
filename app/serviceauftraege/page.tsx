@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import RoleGuard from '../components/RoleGuard'
 import StatusBadge from '../components/StatusBadge'
 import { supabase } from '@/lib/supabase'
+import { useRealtimeTable } from '@/lib/useRealtimeTable'
 
 type Kunde = {
   id: string
@@ -19,28 +20,12 @@ type Fahrzeug = {
   kennzeichen: string | null
   marke: string | null
   modell: string | null
-  fahrgestellnummer: string | null
 }
 
 type Mitarbeiter = {
   id: string
   vorname: string | null
   nachname: string | null
-  rolle: string | null
-}
-
-type Benutzerprofil = {
-  id: string
-  rolle: string | null
-  mitarbeiter_id: string | null
-}
-
-type Lagerartikel = {
-  id: string
-  artikelnummer: number | null
-  name: string | null
-  bestand: number | null
-  verkaufspreis: number | null
 }
 
 type Serviceauftrag = {
@@ -51,175 +36,100 @@ type Serviceauftrag = {
   art: string | null
   status: string | null
   fehlerbeschreibung: string | null
-  kilometerstand_bei_annahme: number | null
   interne_notiz: string | null
-  freigabe_status: string | null
+  created_at: string | null
 }
 
-type Arbeitszeit = {
-  id: string
-  serviceauftrag_id: string
-  beschreibung: string | null
-  stunden: number | null
-  stundensatz: number | null
-}
-
-type Material = {
-  id: string
-  serviceauftrag_id: string
-  lagerartikel_id: string | null
-  bezeichnung: string | null
-  menge: number | null
-  einzelpreis: number | null
-}
-
-const GESPERRTE_STATUS = ['abgeschlossen', 'archiviert']
-const VORGESETZTEN_ROLLEN = ['Admin', 'Serviceannahme', 'Buchhaltung']
 const AUFTRAGSARTEN = [
   'Inspektion',
-  'Wartung',
   'Reparatur',
   'Diagnose',
-  'TÜV',
-  'Reifenservice',
+  'Wartung',
   'Ölwechsel',
-  'Bremsenservice',
-  'Unfallinstandsetzung',
+  'Bremsen',
+  'Reifen',
+  'Karosserie',
   'Elektrik',
-  'Klimaservice',
+  'Tuning',
+  'Gutachten',
   'Sonstiges',
+]
+
+const STATUS = [
+  'offen',
+  'angenommen',
+  'in_arbeit',
+  'wartet',
+  'wartet_auf_freigabe',
+  'fertig',
+  'abgeschlossen',
+  'archiviert',
 ]
 
 export default function ServiceauftraegePage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Behördenvertreter']}>
-      <ServiceauftraegePageContent />
+    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Werkstatt', 'Serviceannahme', 'Buchhaltung', 'Behördenvertreter']}>
+      <ServiceauftraegeContent />
     </RoleGuard>
   )
 }
 
-function ServiceauftraegePageContent() {
+function ServiceauftraegeContent() {
+  const [auftraege, setAuftraege] = useState<Serviceauftrag[]>([])
   const [kunden, setKunden] = useState<Kunde[]>([])
   const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([])
   const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter[]>([])
-  const [lagerartikel, setLagerartikel] = useState<Lagerartikel[]>([])
-  const [serviceauftraege, setServiceauftraege] = useState<Serviceauftrag[]>([])
-  const [arbeitszeiten, setArbeitszeiten] = useState<Arbeitszeit[]>([])
-  const [materialien, setMaterialien] = useState<Material[]>([])
-  const [aktuellesProfil, setAktuellesProfil] = useState<Benutzerprofil | null>(null)
 
-  const [sucheKundeFahrzeug, setSucheKundeFahrzeug] = useState('')
+  const [suche, setSuche] = useState('')
+  const [kundeSuche, setKundeSuche] = useState('')
+  const [fahrzeugSuche, setFahrzeugSuche] = useState('')
+  const [mitarbeiterSuche, setMitarbeiterSuche] = useState('')
+
   const [kundeId, setKundeId] = useState('')
   const [fahrzeugId, setFahrzeugId] = useState('')
   const [mitarbeiterId, setMitarbeiterId] = useState('')
-  const [art, setArt] = useState(AUFTRAGSARTEN[0])
+  const [art, setArt] = useState('Reparatur')
   const [status, setStatus] = useState('offen')
   const [fehlerbeschreibung, setFehlerbeschreibung] = useState('')
-  const [kilometerstand, setKilometerstand] = useState('')
   const [interneNotiz, setInterneNotiz] = useState('')
-  const [freigabeStatus, setFreigabeStatus] = useState('offen')
-
-  const [arbeitszeitBeschreibung, setArbeitszeitBeschreibung] = useState('')
-  const [arbeitszeitStunden, setArbeitszeitStunden] = useState('')
-  const [arbeitszeitStundensatz, setArbeitszeitStundensatz] = useState('')
-
-  const [materialLagerartikelId, setMaterialLagerartikelId] = useState('')
-  const [materialMenge, setMaterialMenge] = useState('')
-  const [materialEinzelpreis, setMaterialEinzelpreis] = useState('')
 
   const [bearbeitenId, setBearbeitenId] = useState<string | null>(null)
-  const [bearbeitenSucheKundeFahrzeug, setBearbeitenSucheKundeFahrzeug] = useState('')
-  const [bearbeitenKundeId, setBearbeitenKundeId] = useState('')
-  const [bearbeitenFahrzeugId, setBearbeitenFahrzeugId] = useState('')
-  const [bearbeitenMitarbeiterId, setBearbeitenMitarbeiterId] = useState('')
-  const [bearbeitenArt, setBearbeitenArt] = useState(AUFTRAGSARTEN[0])
-  const [bearbeitenStatus, setBearbeitenStatus] = useState('offen')
-  const [bearbeitenFehlerbeschreibung, setBearbeitenFehlerbeschreibung] = useState('')
-  const [bearbeitenKilometerstand, setBearbeitenKilometerstand] = useState('')
-  const [bearbeitenInterneNotiz, setBearbeitenInterneNotiz] = useState('')
-  const [bearbeitenFreigabeStatus, setBearbeitenFreigabeStatus] = useState('offen')
-
   const [meldung, setMeldung] = useState('')
   const [fehler, setFehler] = useState('')
+  const [letzteAktualisierung, setLetzteAktualisierung] = useState('')
 
-  async function ladeAlles() {
-    setFehler('')
-
-    const sessionRes = await supabase.auth.getSession()
-    const userId = sessionRes.data.session?.user?.id || null
-
-    const [kRes, fRes, mRes, sRes, aRes, matRes, lRes, profilRes] = await Promise.all([
-      supabase.from('kunden').select('*').order('created_at', { ascending: false }),
+  const laden = useCallback(async () => {
+    const [aRes, kRes, fRes, mRes] = await Promise.all([
+      supabase.from('serviceauftraege').select('*').order('created_at', { ascending: false }),
+      supabase.from('kunden').select('*').order('firmenname'),
       supabase.from('fahrzeuge').select('*').order('kennzeichen'),
       supabase.from('mitarbeiter').select('*').order('vorname'),
-      supabase.from('serviceauftraege').select('*').order('created_at', { ascending: false }),
-      supabase.from('serviceauftrag_arbeitszeiten').select('*'),
-      supabase.from('serviceauftrag_material').select('*'),
-      supabase.from('lagerartikel').select('id, artikelnummer, name, bestand, verkaufspreis'),
-      userId
-        ? supabase
-            .from('benutzerprofile')
-            .select('id, rolle, mitarbeiter_id')
-            .eq('id', userId)
-            .single()
-        : Promise.resolve({ data: null, error: null } as any),
     ])
 
-    if (
-      kRes.error ||
-      fRes.error ||
-      mRes.error ||
-      sRes.error ||
-      aRes.error ||
-      matRes.error ||
-      lRes.error ||
-      profilRes.error
-    ) {
-      setFehler(
-        kRes.error?.message ||
-          fRes.error?.message ||
-          mRes.error?.message ||
-          sRes.error?.message ||
-          aRes.error?.message ||
-          matRes.error?.message ||
-          lRes.error?.message ||
-          profilRes.error?.message ||
-          ''
-      )
+    if (aRes.error || kRes.error || fRes.error || mRes.error) {
+      setFehler(aRes.error?.message || kRes.error?.message || fRes.error?.message || mRes.error?.message || '')
       return
     }
 
+    setAuftraege((aRes.data || []) as Serviceauftrag[])
     setKunden((kRes.data || []) as Kunde[])
     setFahrzeuge((fRes.data || []) as Fahrzeug[])
     setMitarbeiter((mRes.data || []) as Mitarbeiter[])
-    setServiceauftraege((sRes.data || []) as Serviceauftrag[])
-    setArbeitszeiten((aRes.data || []) as Arbeitszeit[])
-    setMaterialien((matRes.data || []) as Material[])
-    setLagerartikel((lRes.data || []) as Lagerartikel[])
-    setAktuellesProfil((profilRes.data as Benutzerprofil | null) || null)
-
-    if (!mitarbeiterId && (profilRes.data as Benutzerprofil | null)?.mitarbeiter_id) {
-      setMitarbeiterId((profilRes.data as Benutzerprofil).mitarbeiter_id || '')
-    }
-  }
-
-  useEffect(() => {
-    ladeAlles()
+    setLetzteAktualisierung(new Date().toLocaleTimeString('de-DE'))
   }, [])
 
-  function istGesperrt(statusValue: string | null) {
-    return GESPERRTE_STATUS.includes(String(statusValue || '').toLowerCase())
-  }
+  useEffect(() => {
+    laden()
+  }, [laden])
 
-  function istVorgesetzter() {
-    return VORGESETZTEN_ROLLEN.includes(String(aktuellesProfil?.rolle || ''))
-  }
+  useRealtimeTable('serviceauftraege', laden)
+  useRealtimeTable('serviceauftrag_material', laden)
+  useRealtimeTable('serviceauftrag_arbeitszeiten', laden)
+  useRealtimeTable('serviceauftrag_timeline', laden)
 
-  function kundeName(id: string | null) {
-    const kunde = kunden.find((k) => k.id === id)
-    return kunde
-      ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
-      : '-'
+  function kundenName(id: string | null) {
+    const k = kunden.find((x) => x.id === id)
+    return k ? k.firmenname || `${k.vorname || ''} ${k.nachname || ''}`.trim() : '-'
   }
 
   function fahrzeugName(id: string | null) {
@@ -232,298 +142,129 @@ function ServiceauftraegePageContent() {
     return m ? `${m.vorname || ''} ${m.nachname || ''}`.trim() : '-'
   }
 
-  const kundenFahrzeugTreffer = useMemo(() => {
-    const q = sucheKundeFahrzeug.trim().toLowerCase()
-
-    return fahrzeuge.filter((f) => {
-      const kunde = kunden.find((k) => k.id === f.kunde_id)
-      const kundeText = kunde
-        ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
-        : ''
-
+  const kundenGefiltert = useMemo(() => {
+    const q = kundeSuche.trim().toLowerCase()
+    return kunden.filter((k) => {
       if (!q) return true
-
-      return [kundeText, f.kennzeichen, f.marke, f.modell, f.fahrgestellnummer]
+      return [k.firmenname, k.vorname, k.nachname]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q))
     })
-  }, [fahrzeuge, kunden, sucheKundeFahrzeug])
+  }, [kunden, kundeSuche])
 
-  const bearbeitenKundenFahrzeugTreffer = useMemo(() => {
-    const q = bearbeitenSucheKundeFahrzeug.trim().toLowerCase()
+  const fahrzeugeGefiltert = useMemo(() => {
+    const q = fahrzeugSuche.trim().toLowerCase()
 
     return fahrzeuge.filter((f) => {
-      const kunde = kunden.find((k) => k.id === f.kunde_id)
-      const kundeText = kunde
-        ? kunde.firmenname || `${kunde.vorname || ''} ${kunde.nachname || ''}`.trim()
-        : ''
-
+      if (kundeId && f.kunde_id !== kundeId) return false
       if (!q) return true
 
-      return [kundeText, f.kennzeichen, f.marke, f.modell, f.fahrgestellnummer]
+      return [f.kennzeichen, f.marke, f.modell]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q))
     })
-  }, [fahrzeuge, kunden, bearbeitenSucheKundeFahrzeug])
+  }, [fahrzeuge, fahrzeugSuche, kundeId])
 
-  async function erstellen(e: React.FormEvent) {
-    e.preventDefault()
-    setFehler('')
-    setMeldung('')
+  const mitarbeiterGefiltert = useMemo(() => {
+    const q = mitarbeiterSuche.trim().toLowerCase()
+    return mitarbeiter.filter((m) => {
+      if (!q) return true
+      return [m.vorname, m.nachname]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    })
+  }, [mitarbeiter, mitarbeiterSuche])
 
-    if (!kundeId || !fahrzeugId) {
-      setFehler('Bitte Kunde/Fahrzeug direkt in der gemeinsamen Suche auswählen.')
-      return
-    }
+  const auftraegeGefiltert = useMemo(() => {
+    const q = suche.trim().toLowerCase()
 
-    if (!mitarbeiterId) {
-      setFehler('Bitte einen Mitarbeiter zuweisen.')
-      return
-    }
+    return auftraege.filter((a) => {
+      if (!q) return true
 
-    if (!art.trim()) {
-      setFehler('Bitte eine Auftragsart auswählen.')
-      return
-    }
+      return [
+        a.art,
+        a.status,
+        a.fehlerbeschreibung,
+        a.interne_notiz,
+        kundenName(a.kunde_id),
+        fahrzeugName(a.fahrzeug_id),
+        mitarbeiterName(a.mitarbeiter_id),
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    })
+  }, [auftraege, suche, kunden, fahrzeuge, mitarbeiter])
 
-    const insertRes = await supabase
-      .from('serviceauftraege')
-      .insert({
-        kunde_id: kundeId,
-        fahrzeug_id: fahrzeugId,
-        mitarbeiter_id: mitarbeiterId,
-        art,
-        status,
-        fehlerbeschreibung: fehlerbeschreibung || null,
-        kilometerstand_bei_annahme: kilometerstand ? Number(kilometerstand) : null,
-        interne_notiz: interneNotiz || null,
-        freigabe_status: freigabeStatus || 'offen',
-      })
-      .select()
-      .single()
-
-    if (insertRes.error || !insertRes.data) {
-      setFehler(insertRes.error?.message || 'Serviceauftrag konnte nicht erstellt werden.')
-      return
-    }
-
-    const neuerAuftragId = insertRes.data.id
-
-    if (
-      arbeitszeitBeschreibung.trim() ||
-      arbeitszeitStunden.trim() ||
-      arbeitszeitStundensatz.trim()
-    ) {
-      const arbeitszeitError = await supabase.from('serviceauftrag_arbeitszeiten').insert({
-        serviceauftrag_id: neuerAuftragId,
-        beschreibung: arbeitszeitBeschreibung || null,
-        stunden: arbeitszeitStunden ? Number(arbeitszeitStunden) : 0,
-        stundensatz: arbeitszeitStundensatz ? Number(arbeitszeitStundensatz) : 0,
-      })
-
-      if (arbeitszeitError.error) {
-        setFehler(arbeitszeitError.error.message)
-        return
-      }
-    }
-
-    if (materialLagerartikelId && materialMenge) {
-      const lagerArtikel = lagerartikel.find((l) => l.id === materialLagerartikelId)
-      const mengeNum = Number(materialMenge)
-      const einzelpreisNum = materialEinzelpreis
-        ? Number(materialEinzelpreis)
-        : Number(lagerArtikel?.verkaufspreis || 0)
-
-      const materialError = await supabase.from('serviceauftrag_material').insert({
-        serviceauftrag_id: neuerAuftragId,
-        lagerartikel_id: materialLagerartikelId,
-        bezeichnung: lagerArtikel?.name || null,
-        menge: mengeNum,
-        einzelpreis: einzelpreisNum,
-      })
-
-      if (materialError.error) {
-        setFehler(materialError.error.message)
-        return
-      }
-
-      const artikelBestand = Number(lagerArtikel?.bestand || 0)
-      await supabase
-        .from('lagerartikel')
-        .update({ bestand: artikelBestand - mengeNum })
-        .eq('id', materialLagerartikelId)
-
-      await supabase.from('lagerbewegungen').insert({
-        lagerartikel_id: materialLagerartikelId,
-        bewegungsart: 'entnahme',
-        menge: mengeNum,
-        notiz: 'Automatisch aus Serviceauftrag entnommen',
-        referenz_typ: 'serviceauftrag',
-        referenz_id: neuerAuftragId,
-      })
-    }
-
-    setSucheKundeFahrzeug('')
+  function resetForm() {
+    setBearbeitenId(null)
     setKundeId('')
     setFahrzeugId('')
-    setArt(AUFTRAGSARTEN[0])
+    setMitarbeiterId('')
+    setKundeSuche('')
+    setFahrzeugSuche('')
+    setMitarbeiterSuche('')
+    setArt('Reparatur')
     setStatus('offen')
     setFehlerbeschreibung('')
-    setKilometerstand('')
     setInterneNotiz('')
-    setFreigabeStatus('offen')
-    setArbeitszeitBeschreibung('')
-    setArbeitszeitStunden('')
-    setArbeitszeitStundensatz('')
-    setMaterialLagerartikelId('')
-    setMaterialMenge('')
-    setMaterialEinzelpreis('')
-    if (aktuellesProfil?.mitarbeiter_id) {
-      setMitarbeiterId(aktuellesProfil.mitarbeiter_id)
-    } else {
-      setMitarbeiterId('')
-    }
-    setMeldung('Serviceauftrag wurde erstellt.')
-    ladeAlles()
   }
 
-  function bearbeitenStarten(s: Serviceauftrag) {
-    if (istGesperrt(s.status)) return
-
-    setBearbeitenId(s.id)
-    setBearbeitenKundeId(s.kunde_id || '')
-    setBearbeitenFahrzeugId(s.fahrzeug_id || '')
-    setBearbeitenMitarbeiterId(s.mitarbeiter_id || '')
-    setBearbeitenArt(s.art || AUFTRAGSARTEN[0])
-    setBearbeitenStatus(s.status || 'offen')
-    setBearbeitenFehlerbeschreibung(s.fehlerbeschreibung || '')
-    setBearbeitenKilometerstand(
-      s.kilometerstand_bei_annahme !== null && s.kilometerstand_bei_annahme !== undefined
-        ? String(s.kilometerstand_bei_annahme)
-        : ''
-    )
-    setBearbeitenInterneNotiz(s.interne_notiz || '')
-    setBearbeitenFreigabeStatus(s.freigabe_status || 'offen')
-    setBearbeitenSucheKundeFahrzeug('')
+  function bearbeitenStarten(a: Serviceauftrag) {
+    setBearbeitenId(a.id)
+    setKundeId(a.kunde_id || '')
+    setFahrzeugId(a.fahrzeug_id || '')
+    setMitarbeiterId(a.mitarbeiter_id || '')
+    setKundeSuche(kundenName(a.kunde_id))
+    setFahrzeugSuche(fahrzeugName(a.fahrzeug_id))
+    setMitarbeiterSuche(mitarbeiterName(a.mitarbeiter_id))
+    setArt(a.art || 'Reparatur')
+    setStatus(a.status || 'offen')
+    setFehlerbeschreibung(a.fehlerbeschreibung || '')
+    setInterneNotiz(a.interne_notiz || '')
   }
 
-  function bearbeitenAbbrechen() {
-    setBearbeitenId(null)
-    setBearbeitenKundeId('')
-    setBearbeitenFahrzeugId('')
-    setBearbeitenMitarbeiterId('')
-    setBearbeitenArt(AUFTRAGSARTEN[0])
-    setBearbeitenStatus('offen')
-    setBearbeitenFehlerbeschreibung('')
-    setBearbeitenKilometerstand('')
-    setBearbeitenInterneNotiz('')
-    setBearbeitenFreigabeStatus('offen')
-    setBearbeitenSucheKundeFahrzeug('')
-  }
-
-  async function bearbeitenSpeichern(e: React.FormEvent) {
+  async function speichern(e: React.FormEvent) {
     e.preventDefault()
     setFehler('')
     setMeldung('')
 
-    if (!bearbeitenId) return
-
-    const alterAuftrag = serviceauftraege.find((s) => s.id === bearbeitenId) || null
-
-    if (!bearbeitenKundeId || !bearbeitenFahrzeugId) {
-      setFehler('Bitte Kunde/Fahrzeug direkt in der gemeinsamen Suche auswählen.')
+    if (!kundeId) {
+      setFehler('Bitte einen Kunden auswählen.')
       return
     }
 
-    if (!bearbeitenMitarbeiterId) {
-      setFehler('Bitte einen Mitarbeiter zuweisen.')
+    if (!fahrzeugId) {
+      setFehler('Bitte ein Fahrzeug auswählen.')
       return
     }
 
-    if (
-      alterAuftrag &&
-      alterAuftrag.mitarbeiter_id !== bearbeitenMitarbeiterId &&
-      !istVorgesetzter()
-    ) {
-      setFehler('Die Änderung der Mitarbeiter-Zuweisung ist nur durch Vorgesetzte erlaubt.')
+    const payload = {
+      kunde_id: kundeId,
+      fahrzeug_id: fahrzeugId,
+      mitarbeiter_id: mitarbeiterId || null,
+      art,
+      status,
+      fehlerbeschreibung: fehlerbeschreibung || null,
+      interne_notiz: interneNotiz || null,
+    }
+
+    const res = bearbeitenId
+      ? await supabase.from('serviceauftraege').update(payload).eq('id', bearbeitenId)
+      : await supabase.from('serviceauftraege').insert(payload)
+
+    if (res.error) {
+      setFehler(res.error.message)
       return
     }
 
-    if (!bearbeitenArt.trim()) {
-      setFehler('Bitte eine Auftragsart auswählen.')
-      return
-    }
-
-    const { error } = await supabase
-      .from('serviceauftraege')
-      .update({
-        kunde_id: bearbeitenKundeId,
-        fahrzeug_id: bearbeitenFahrzeugId,
-        mitarbeiter_id: bearbeitenMitarbeiterId,
-        art: bearbeitenArt,
-        status: bearbeitenStatus,
-        fehlerbeschreibung: bearbeitenFehlerbeschreibung || null,
-        kilometerstand_bei_annahme: bearbeitenKilometerstand
-          ? Number(bearbeitenKilometerstand)
-          : null,
-        interne_notiz: bearbeitenInterneNotiz || null,
-        freigabe_status: bearbeitenFreigabeStatus || 'offen',
-      })
-      .eq('id', bearbeitenId)
-
-    if (error) {
-      setFehler(error.message)
-      return
-    }
-
-    bearbeitenAbbrechen()
-    setMeldung('Serviceauftrag wurde gespeichert.')
-    ladeAlles()
+    setMeldung(bearbeitenId ? 'Serviceauftrag wurde gespeichert.' : 'Serviceauftrag wurde erstellt.')
+    resetForm()
+    laden()
   }
 
-  async function loeschen(id: string, statusValue: string | null) {
-    setFehler('')
-    setMeldung('')
-
-    if (istGesperrt(statusValue)) {
-      setFehler('Abgeschlossene oder archivierte Serviceaufträge dürfen nicht gelöscht werden.')
-      return
-    }
-
+  async function loeschen(id: string) {
     const ok = window.confirm('Serviceauftrag wirklich löschen?')
     if (!ok) return
-
-    const arbeitszeitenZuAuftrag = arbeitszeiten.filter((a) => a.serviceauftrag_id === id)
-    const materialienZuAuftrag = materialien.filter((m) => m.serviceauftrag_id === id)
-
-    for (const mat of materialienZuAuftrag) {
-      if (mat.lagerartikel_id && mat.menge) {
-        const lagerArtikel = lagerartikel.find((l) => l.id === mat.lagerartikel_id)
-        const neuerBestand = Number(lagerArtikel?.bestand || 0) + Number(mat.menge || 0)
-
-        await supabase
-          .from('lagerartikel')
-          .update({ bestand: neuerBestand })
-          .eq('id', mat.lagerartikel_id)
-
-        await supabase.from('lagerbewegungen').insert({
-          lagerartikel_id: mat.lagerartikel_id,
-          bewegungsart: 'rueckbuchung',
-          menge: Number(mat.menge || 0),
-          notiz: 'Rückbuchung nach Löschen des Serviceauftrags',
-          referenz_typ: 'serviceauftrag',
-          referenz_id: id,
-        })
-      }
-    }
-
-    if (arbeitszeitenZuAuftrag.length > 0) {
-      await supabase.from('serviceauftrag_arbeitszeiten').delete().eq('serviceauftrag_id', id)
-    }
-
-    if (materialienZuAuftrag.length > 0) {
-      await supabase.from('serviceauftrag_material').delete().eq('serviceauftrag_id', id)
-    }
 
     const { error } = await supabase.from('serviceauftraege').delete().eq('id', id)
 
@@ -533,27 +274,7 @@ function ServiceauftraegePageContent() {
     }
 
     setMeldung('Serviceauftrag wurde gelöscht.')
-    ladeAlles()
-  }
-
-  function auftragArbeitskosten(auftragId: string) {
-    return arbeitszeiten
-      .filter((a) => a.serviceauftrag_id === auftragId)
-      .reduce((sum, a) => sum + Number(a.stunden || 0) * Number(a.stundensatz || 0), 0)
-  }
-
-  function auftragMaterialkosten(auftragId: string) {
-    return materialien
-      .filter((m) => m.serviceauftrag_id === auftragId)
-      .reduce((sum, m) => sum + Number(m.menge || 0) * Number(m.einzelpreis || 0), 0)
-  }
-
-  function auftragArbeitszeiten(auftragId: string) {
-    return arbeitszeiten.filter((a) => a.serviceauftrag_id === auftragId)
-  }
-
-  function auftragMaterialien(auftragId: string) {
-    return materialien.filter((m) => m.serviceauftrag_id === auftragId)
+    laden()
   }
 
   return (
@@ -562,95 +283,123 @@ function ServiceauftraegePageContent() {
         <div>
           <h1 className="topbar-title">Serviceaufträge</h1>
           <div className="topbar-subtitle">
-            Feste Auftragsarten passend zur Datenbank und Mitarbeiter-Zuweisung mit Rollenlogik.
+            Live-Übersicht aller Werkstattaufträge.
+            {letzteAktualisierung && <> Letzte Aktualisierung: {letzteAktualisierung}</>}
           </div>
         </div>
       </div>
 
-      <form onSubmit={erstellen} className="page-card">
-        <h2 style={{ marginTop: 0 }}>Neuen Serviceauftrag anlegen</h2>
+      <form onSubmit={speichern} className="page-card">
+        <h2 style={{ marginTop: 0 }}>{bearbeitenId ? 'Serviceauftrag bearbeiten' : 'Serviceauftrag erstellen'}</h2>
 
         <div className="form-row">
           <input
-            list="kunde-fahrzeug-liste"
-            placeholder="Kunde oder Fahrzeug suchen und direkt auswählen"
-            value={sucheKundeFahrzeug}
+            placeholder="Kunde suchen und auswählen"
+            value={kundeSuche}
             onChange={(e) => {
-              const value = e.target.value
-              setSucheKundeFahrzeug(value)
-              const match = kundenFahrzeugTreffer.find((f) => {
-                const label = `${kundeName(f.kunde_id)} – ${f.kennzeichen || '-'} – ${f.marke || '-'} ${f.modell || '-'}`
-                return label === value
-              })
-              if (match) {
-                setFahrzeugId(match.id)
-                setKundeId(match.kunde_id || '')
-              }
+              setKundeSuche(e.target.value)
+              setKundeId('')
+              setFahrzeugId('')
+              setFahrzeugSuche('')
             }}
           />
-          <datalist id="kunde-fahrzeug-liste">
-            {kundenFahrzeugTreffer.map((f) => (
-              <option
-                key={f.id}
-                value={`${kundeName(f.kunde_id)} – ${f.kennzeichen || '-'} – ${f.marke || '-'} ${f.modell || '-'}`}
-              />
-            ))}
-          </datalist>
 
-          <select
-            value={mitarbeiterId}
-            onChange={(e) => setMitarbeiterId(e.target.value)}
-          >
-            <option value="">Mitarbeiter zuweisen</option>
-            {mitarbeiter.map((m) => (
-              <option key={m.id} value={m.id}>
-                {`${m.vorname || ''} ${m.nachname || ''}`.trim()}
-              </option>
-            ))}
-          </select>
+          <input
+            placeholder="Fahrzeug suchen und auswählen"
+            value={fahrzeugSuche}
+            onChange={(e) => {
+              setFahrzeugSuche(e.target.value)
+              setFahrzeugId('')
+            }}
+          />
         </div>
+
+        {kundeSuche && !kundeId && (
+          <div className="list-box" style={{ marginTop: 12 }}>
+            {kundenGefiltert.slice(0, 8).map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => {
+                  setKundeId(k.id)
+                  setKundeSuche(kundenName(k.id))
+                }}
+                style={{ margin: 4, background: '#374151' }}
+              >
+                {kundenName(k.id)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {fahrzeugSuche && !fahrzeugId && (
+          <div className="list-box" style={{ marginTop: 12 }}>
+            {fahrzeugeGefiltert.slice(0, 8).map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => {
+                  setFahrzeugId(f.id)
+                  setFahrzeugSuche(fahrzeugName(f.id))
+                }}
+                style={{ margin: 4, background: '#374151' }}
+              >
+                {fahrzeugName(f.id)}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="form-row" style={{ marginTop: 12 }}>
           <select value={art} onChange={(e) => setArt(e.target.value)}>
-            {AUFTRAGSARTEN.map((eintrag) => (
-              <option key={eintrag} value={eintrag}>
-                {eintrag}
+            {AUFTRAGSARTEN.map((a) => (
+              <option key={a} value={a}>
+                {a}
               </option>
             ))}
           </select>
 
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="offen">offen</option>
-            <option value="in_arbeit">in_arbeit</option>
-            <option value="wartet">wartet</option>
-            <option value="abgeschlossen">abgeschlossen</option>
-            <option value="archiviert">archiviert</option>
+            {STATUS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
 
-          <select
-            value={freigabeStatus}
-            onChange={(e) => setFreigabeStatus(e.target.value)}
-          >
-            <option value="offen">Freigabe offen</option>
-            <option value="freigegeben">freigegeben</option>
-            <option value="abgelehnt">abgelehnt</option>
-          </select>
-        </div>
-
-        <div className="form-row" style={{ marginTop: 12 }}>
           <input
-            placeholder="Kilometerstand"
-            value={kilometerstand}
-            onChange={(e) => setKilometerstand(e.target.value)}
+            placeholder="Mitarbeiter suchen und auswählen"
+            value={mitarbeiterSuche}
+            onChange={(e) => {
+              setMitarbeiterSuche(e.target.value)
+              setMitarbeiterId('')
+            }}
           />
         </div>
 
+        {mitarbeiterSuche && !mitarbeiterId && (
+          <div className="list-box" style={{ marginTop: 12 }}>
+            {mitarbeiterGefiltert.slice(0, 8).map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  setMitarbeiterId(m.id)
+                  setMitarbeiterSuche(mitarbeiterName(m.id))
+                }}
+                style={{ margin: 4, background: '#374151' }}
+              >
+                {mitarbeiterName(m.id)}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div style={{ marginTop: 12 }}>
           <textarea
-            placeholder="Fehlerbeschreibung"
+            placeholder="Fehlerbeschreibung / Kundenauftrag"
             value={fehlerbeschreibung}
             onChange={(e) => setFehlerbeschreibung(e.target.value)}
-            style={{ width: '100%', minHeight: 100 }}
           />
         </div>
 
@@ -659,244 +408,45 @@ function ServiceauftraegePageContent() {
             placeholder="Interne Notiz"
             value={interneNotiz}
             onChange={(e) => setInterneNotiz(e.target.value)}
-            style={{ width: '100%', minHeight: 90 }}
           />
         </div>
 
-        <div className="list-box" style={{ marginTop: 16 }}>
-          <h3 style={{ marginTop: 0 }}>Arbeitszeit für diesen Auftrag</h3>
-          <div className="form-row">
-            <input
-              placeholder="Beschreibung"
-              value={arbeitszeitBeschreibung}
-              onChange={(e) => setArbeitszeitBeschreibung(e.target.value)}
-            />
-            <input
-              placeholder="Stunden"
-              value={arbeitszeitStunden}
-              onChange={(e) => setArbeitszeitStunden(e.target.value)}
-            />
-            <input
-              placeholder="Stundensatz"
-              value={arbeitszeitStundensatz}
-              onChange={(e) => setArbeitszeitStundensatz(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="list-box" style={{ marginTop: 16 }}>
-          <h3 style={{ marginTop: 0 }}>Material für diesen Auftrag</h3>
-          <div className="form-row">
-            <select
-              value={materialLagerartikelId}
-              onChange={(e) => {
-                setMaterialLagerartikelId(e.target.value)
-                const lagerArtikel = lagerartikel.find((l) => l.id === e.target.value)
-                setMaterialEinzelpreis(
-                  lagerArtikel?.verkaufspreis !== null && lagerArtikel?.verkaufspreis !== undefined
-                    ? String(lagerArtikel.verkaufspreis)
-                    : ''
-                )
-              }}
-            >
-              <option value="">Material auswählen</option>
-              {lagerartikel
-                .sort((a, b) => Number(a.artikelnummer || 0) - Number(b.artikelnummer || 0))
-                .map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.artikelnummer || '-'} – {l.name || '-'} – Bestand {Number(l.bestand || 0).toFixed(2)}
-                  </option>
-                ))}
-            </select>
-            <input
-              placeholder="Menge"
-              value={materialMenge}
-              onChange={(e) => setMaterialMenge(e.target.value)}
-            />
-            <input
-              placeholder="Einzelpreis"
-              value={materialEinzelpreis}
-              onChange={(e) => setMaterialEinzelpreis(e.target.value)}
-            />
-          </div>
-        </div>
-
         <div className="action-row">
-          <button type="submit">Serviceauftrag erstellen</button>
+          <button type="submit">{bearbeitenId ? 'Speichern' : 'Serviceauftrag erstellen'}</button>
+          {bearbeitenId && (
+            <button type="button" onClick={resetForm} style={{ background: '#6b7280' }}>
+              Abbrechen
+            </button>
+          )}
         </div>
       </form>
 
-      {bearbeitenId && (
-        <form onSubmit={bearbeitenSpeichern} className="page-card">
-          <h2 style={{ marginTop: 0 }}>Serviceauftrag bearbeiten</h2>
-
-          <div className="form-row">
-            <input
-              list="bearbeiten-kunde-fahrzeug-liste"
-              placeholder="Kunde oder Fahrzeug suchen und direkt auswählen"
-              value={bearbeitenSucheKundeFahrzeug}
-              onChange={(e) => {
-                const value = e.target.value
-                setBearbeitenSucheKundeFahrzeug(value)
-                const match = bearbeitenKundenFahrzeugTreffer.find((f) => {
-                  const label = `${kundeName(f.kunde_id)} – ${f.kennzeichen || '-'} – ${f.marke || '-'} ${f.modell || '-'}`
-                  return label === value
-                })
-                if (match) {
-                  setBearbeitenFahrzeugId(match.id)
-                  setBearbeitenKundeId(match.kunde_id || '')
-                }
-              }}
-            />
-            <datalist id="bearbeiten-kunde-fahrzeug-liste">
-              {bearbeitenKundenFahrzeugTreffer.map((f) => (
-                <option
-                  key={f.id}
-                  value={`${kundeName(f.kunde_id)} – ${f.kennzeichen || '-'} – ${f.marke || '-'} ${f.modell || '-'}`}
-                />
-              ))}
-            </datalist>
-
-            <select
-              value={bearbeitenMitarbeiterId}
-              onChange={(e) => setBearbeitenMitarbeiterId(e.target.value)}
-              disabled={
-                !istVorgesetzter() &&
-                !!serviceauftraege.find((s) => s.id === bearbeitenId)?.mitarbeiter_id &&
-                serviceauftraege.find((s) => s.id === bearbeitenId)?.mitarbeiter_id !== aktuellesProfil?.mitarbeiter_id
-              }
-            >
-              <option value="">Mitarbeiter zuweisen</option>
-              {mitarbeiter.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {`${m.vorname || ''} ${m.nachname || ''}`.trim()}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-row" style={{ marginTop: 12 }}>
-            <select value={bearbeitenArt} onChange={(e) => setBearbeitenArt(e.target.value)}>
-              {AUFTRAGSARTEN.map((eintrag) => (
-                <option key={eintrag} value={eintrag}>
-                  {eintrag}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={bearbeitenStatus}
-              onChange={(e) => setBearbeitenStatus(e.target.value)}
-            >
-              <option value="offen">offen</option>
-              <option value="in_arbeit">in_arbeit</option>
-              <option value="wartet">wartet</option>
-              <option value="abgeschlossen">abgeschlossen</option>
-              <option value="archiviert">archiviert</option>
-            </select>
-
-            <select
-              value={bearbeitenFreigabeStatus}
-              onChange={(e) => setBearbeitenFreigabeStatus(e.target.value)}
-            >
-              <option value="offen">Freigabe offen</option>
-              <option value="freigegeben">freigegeben</option>
-              <option value="abgelehnt">abgelehnt</option>
-            </select>
-          </div>
-
-          <div className="form-row" style={{ marginTop: 12 }}>
-            <input
-              placeholder="Kilometerstand"
-              value={bearbeitenKilometerstand}
-              onChange={(e) => setBearbeitenKilometerstand(e.target.value)}
-            />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <textarea
-              placeholder="Fehlerbeschreibung"
-              value={bearbeitenFehlerbeschreibung}
-              onChange={(e) => setBearbeitenFehlerbeschreibung(e.target.value)}
-              style={{ width: '100%', minHeight: 100 }}
-            />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <textarea
-              placeholder="Interne Notiz"
-              value={bearbeitenInterneNotiz}
-              onChange={(e) => setBearbeitenInterneNotiz(e.target.value)}
-              style={{ width: '100%', minHeight: 90 }}
-            />
-          </div>
-
-          <div className="action-row">
-            <button type="submit">Speichern</button>
-            <button type="button" onClick={bearbeitenAbbrechen} style={{ background: '#6b7280' }}>
-              Abbrechen
-            </button>
-          </div>
-        </form>
-      )}
-
       <div className="page-card">
-        <h2 style={{ marginTop: 0 }}>Bestehende Serviceaufträge</h2>
+        <input
+          placeholder="Serviceaufträge durchsuchen"
+          value={suche}
+          onChange={(e) => setSuche(e.target.value)}
+        />
 
-        {serviceauftraege.map((s) => {
-          const arbeitskosten = auftragArbeitskosten(s.id)
-          const materialkosten = auftragMaterialkosten(s.id)
-          const gesamt = arbeitskosten + materialkosten
+        <div style={{ marginTop: 16 }}>
+          {auftraegeGefiltert.map((a) => (
+            <div key={a.id} className="list-box">
+              <strong>{a.art || '-'}</strong>
+              <br />
+              Status: <StatusBadge status={a.status || 'offen'} />
+              <br />
+              Kunde: {kundenName(a.kunde_id)}
+              <br />
+              Fahrzeug: {fahrzeugName(a.fahrzeug_id)}
+              <br />
+              Mitarbeiter: {mitarbeiterName(a.mitarbeiter_id)}
+              <br />
+              Beschreibung: {a.fehlerbeschreibung || '-'}
 
-          return (
-            <div key={s.id} className="list-box">
-              <strong>{s.art || '-'}</strong>
-              <br />
-              Kunde: {kundeName(s.kunde_id)}
-              <br />
-              Fahrzeug: {fahrzeugName(s.fahrzeug_id)}
-              <br />
-              Mitarbeiter: {mitarbeiterName(s.mitarbeiter_id)}
-              <br />
-              Status: <StatusBadge status={s.status} />
-              <br />
-              Freigabe: <StatusBadge status={s.freigabe_status || 'offen'} />
-              <br />
-              Fehlerbeschreibung: {s.fehlerbeschreibung || '-'}
-              <br />
-              Arbeitskosten: {arbeitskosten.toFixed(2)} €
-              <br />
-              Materialkosten: {materialkosten.toFixed(2)} €
-              <br />
-              Gesamt: {gesamt.toFixed(2)} €
-
-              <div style={{ marginTop: 12 }}>
-                <strong>Arbeitszeiten</strong>
-                {auftragArbeitszeiten(s.id).length === 0 && <div>-</div>}
-                {auftragArbeitszeiten(s.id).map((a) => (
-                  <div key={a.id}>
-                    {a.beschreibung || '-'} – {Number(a.stunden || 0).toFixed(2)} h ×{' '}
-                    {Number(a.stundensatz || 0).toFixed(2)} €
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ marginTop: 12 }}>
-                <strong>Materialien</strong>
-                {auftragMaterialien(s.id).length === 0 && <div>-</div>}
-                {auftragMaterialien(s.id).map((m) => (
-                  <div key={m.id}>
-                    {m.bezeichnung || '-'} – {Number(m.menge || 0).toFixed(2)} ×{' '}
-                    {Number(m.einzelpreis || 0).toFixed(2)} €
-                  </div>
-                ))}
-              </div>
-
-              <div className="action-row" style={{ marginTop: 10 }}>
+              <div className="action-row">
                 <Link
-                  href={`/serviceauftraege/${s.id}`}
+                  href={`/serviceauftraege/${a.id}`}
                   style={{
-                    display: 'inline-block',
                     padding: '10px 16px',
                     background: '#2563eb',
                     color: 'white',
@@ -907,28 +457,19 @@ function ServiceauftraegePageContent() {
                   Öffnen
                 </Link>
 
-                {!istGesperrt(s.status) && (
-                  <>
-                    <button type="button" onClick={() => bearbeitenStarten(s)}>
-                      Bearbeiten
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => loeschen(s.id, s.status)}
-                      style={{ background: '#dc2626' }}
-                    >
-                      Löschen
-                    </button>
-                  </>
-                )}
+                <button type="button" onClick={() => bearbeitenStarten(a)}>
+                  Bearbeiten
+                </button>
+
+                <button type="button" onClick={() => loeschen(a.id)} style={{ background: '#dc2626' }}>
+                  Löschen
+                </button>
               </div>
             </div>
-          )
-        })}
+          ))}
 
-        {serviceauftraege.length === 0 && (
-          <div className="muted">Noch keine Serviceaufträge vorhanden.</div>
-        )}
+          {auftraegeGefiltert.length === 0 && <div className="muted">Keine Serviceaufträge vorhanden.</div>}
+        </div>
       </div>
 
       {meldung && <div className="badge badge-success">{meldung}</div>}

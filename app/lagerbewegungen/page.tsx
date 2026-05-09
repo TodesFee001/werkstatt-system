@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import RoleGuard from '../components/RoleGuard'
 import { supabase } from '@/lib/supabase'
+import { useRealtimeTable } from '@/lib/useRealtimeTable'
 
 type Bewegung = {
   id: string
@@ -35,8 +36,9 @@ function LagerbewegungenContent() {
   const [artikel, setArtikel] = useState<Artikel[]>([])
   const [suche, setSuche] = useState('')
   const [fehler, setFehler] = useState('')
+  const [letzteAktualisierung, setLetzteAktualisierung] = useState<string>('')
 
-  async function laden() {
+  const laden = useCallback(async () => {
     const [bRes, aRes] = await Promise.all([
       supabase.from('lagerbewegungen').select('*').order('erstellt_am', { ascending: false }),
       supabase.from('lagerartikel').select('id, artikelnummer, name'),
@@ -49,11 +51,15 @@ function LagerbewegungenContent() {
 
     setBewegungen((bRes.data || []) as Bewegung[])
     setArtikel((aRes.data || []) as Artikel[])
-  }
+    setLetzteAktualisierung(new Date().toLocaleTimeString('de-DE'))
+  }, [])
 
   useEffect(() => {
     laden()
-  }, [])
+  }, [laden])
+
+  useRealtimeTable('lagerbewegungen', laden)
+  useRealtimeTable('lagerartikel', laden)
 
   function artikelName(id: string) {
     const a = artikel.find((x) => x.id === id)
@@ -84,7 +90,8 @@ function LagerbewegungenContent() {
         <div>
           <h1 className="topbar-title">Lagerbewegungen</h1>
           <div className="topbar-subtitle">
-            Nachvollziehbare Historie aller Bestandsänderungen.
+            Live-Historie aller Bestandsänderungen.
+            {letzteAktualisierung && <> Letzte Aktualisierung: {letzteAktualisierung}</>}
           </div>
         </div>
       </div>
@@ -111,7 +118,7 @@ function LagerbewegungenContent() {
               <br />
               Benutzer: {b.benutzername || '-'}
               <br />
-              Zeit: {new Date(b.erstellt_am).toLocaleString('de-DE')}
+              Zeit: {b.erstellt_am ? new Date(b.erstellt_am).toLocaleString('de-DE') : '-'}
             </div>
           ))}
 
