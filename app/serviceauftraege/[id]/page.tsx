@@ -9,6 +9,7 @@ import ServiceTimeline from '../../components/ServiceTimeline'
 import { supabase } from '@/lib/supabase'
 import { timelineEintrag } from '@/lib/timeline'
 import { useRealtimeTable } from '@/lib/useRealtimeTable'
+import { lagerBestandAnpassen } from '@/lib/lagerbewegung'
 
 type Serviceauftrag = {
   id: string
@@ -49,6 +50,15 @@ type Material = {
   bezeichnung: string | null
   menge: number | null
   einzelpreis: number | null
+  bestand_abgezogen: boolean | null
+}
+
+type Lagerartikel = {
+  id: string
+  artikelnummer: number | null
+  name: string | null
+  bestand: number | null
+  verkaufspreis: number | null
 }
 
 const STATUS = [
@@ -80,6 +90,7 @@ function ServiceauftragDetailPageContent() {
   const [mitarbeiter, setMitarbeiter] = useState<Mitarbeiter | null>(null)
   const [arbeitszeiten, setArbeitszeiten] = useState<Arbeitszeit[]>([])
   const [materialien, setMaterialien] = useState<Material[]>([])
+  const [lagerartikel, setLagerartikel] = useState<Lagerartikel[]>([])
 
   const [status, setStatus] = useState('offen')
   const [fehlerbeschreibung, setFehlerbeschreibung] = useState('')
@@ -97,6 +108,8 @@ function ServiceauftragDetailPageContent() {
   const [azStunden, setAzStunden] = useState('')
   const [azSatz, setAzSatz] = useState('')
 
+  const [matSuche, setMatSuche] = useState('')
+  const [matLagerartikelId, setMatLagerartikelId] = useState('')
   const [matBezeichnung, setMatBezeichnung] = useState('')
   const [matMenge, setMatMenge] = useState('')
   const [matPreis, setMatPreis] = useState('')
@@ -151,18 +164,20 @@ function ServiceauftragDetailPageContent() {
       setMitarbeiter(null)
     }
 
-    const [azRes, matRes] = await Promise.all([
+    const [azRes, matRes, lagerRes] = await Promise.all([
       supabase.from('serviceauftrag_arbeitszeiten').select('*').eq('serviceauftrag_id', id),
       supabase.from('serviceauftrag_material').select('*').eq('serviceauftrag_id', id),
+      supabase.from('lagerartikel').select('id, artikelnummer, name, bestand, verkaufspreis').order('artikelnummer'),
     ])
 
-    if (azRes.error || matRes.error) {
-      setFehler(azRes.error?.message || matRes.error?.message || '')
+    if (azRes.error || matRes.error || lagerRes.error) {
+      setFehler(azRes.error?.message || matRes.error?.message || lagerRes.error?.message || '')
       return
     }
 
     setArbeitszeiten((azRes.data || []) as Arbeitszeit[])
     setMaterialien((matRes.data || []) as Material[])
+    setLagerartikel((lagerRes.data || []) as Lagerartikel[])
     setLetzteAktualisierung(new Date().toLocaleTimeString('de-DE'))
   }, [id])
 
@@ -174,6 +189,26 @@ function ServiceauftragDetailPageContent() {
   useRealtimeTable('serviceauftrag_material', laden)
   useRealtimeTable('serviceauftrag_arbeitszeiten', laden)
   useRealtimeTable('serviceauftrag_timeline', laden)
+  useRealtimeTable('lagerartikel', laden)
+  useRealtimeTable('lagerbewegungen', laden)
+
+  const lagerGefiltert = useMemo(() => {
+    const q = matSuche.trim().toLowerCase()
+
+    return lagerartikel.filter((a) => {
+      if (!q) return true
+
+      return [a.artikelnummer, a.name]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    })
+  }, [lagerartikel, matSuche])
+
+  function lagerName(id: string | null) {
+    const a = lagerartikel.find((x) => x.id === id)
+    if (!a) return '-'
+    return `${a.artikelnummer ?? '-'} – ${a.name || '-'}`
+  }
 
   async function auftragSpeichern() {
     setFehler('')
@@ -270,11 +305,47 @@ function ServiceauftragDetailPageContent() {
     setFehler('')
     setMeldung('')
 
+    const menge = Number(matMenge || 0)
+
+    if (!matBezeichnung.trim()) {
+      setFehler('Bitte Material auswählen oder Bezeichnung eingeben.')
+      return
+    }
+
+    if (menge <= 0) {
+      setFehler('Bitte gültige Menge eingeben.')
+      return
+    }
+
+    if (matLagerartikelId) {
+      const artikel = lagerartikel.find((a) => a.id === matLagerartikelId)
+
+      if (!artikel) {
+        setFehler('Lagerartikel nicht gefunden.')
+        return
+      }
+
+      if (Number(artikel.bestand || 0) < menge) {
+        setFehler('Nicht genug Bestand vorhanden.')
+        return
+      }
+
+      await lagerBestandAnpassen({
+        lagerartikelId: matLagerartikelId,
+        menge,
+        bewegung: 'entnahme',
+        grund: `Material für Serviceauftrag verwendet: ${matBezeichnung}`,
+        serviceauftragId: id,
+      })
+    }
+
     const { error } = await supabase.from('serviceauftrag_material').insert({
       serviceauftrag_id: id,
+      lagerartikel_id: matLagerartikelId || null,
       bezeichnung: matBezeichnung || null,
-      menge: Number(matMenge || 0),
+      menge,
       einzelpreis: Number(matPreis || 0),
+      bestand_abgezogen: Boolean(matLagerartikelId),
     })
 
     if (error) {
@@ -289,18 +360,35 @@ function ServiceauftragDetailPageContent() {
       `${matBezeichnung || 'Material'} · Menge ${matMenge || 0} · ${matPreis || 0} €/Stk.`
     )
 
+    setMatSuche('')
+    setMatLagerartikelId('')
     setMatBezeichnung('')
     setMatMenge('')
     setMatPreis('')
-    setMeldung('Material wurde hinzugefügt.')
+    setMeldung('Material wurde hinzugefügt und Lagerbestand wurde angepasst.')
     laden()
   }
 
   async function materialLoeschen(matId: string) {
-    const ok = window.confirm('Material wirklich löschen?')
+    const ok = window.confirm('Material wirklich löschen? Wenn es aus dem Lager kam, wird der Bestand zurückgebucht.')
     if (!ok) return
 
     const mat = materialien.find((x) => x.id === matId)
+
+    if (!mat) {
+      setFehler('Material nicht gefunden.')
+      return
+    }
+
+    if (mat.lagerartikel_id && mat.bestand_abgezogen) {
+      await lagerBestandAnpassen({
+        lagerartikelId: mat.lagerartikel_id,
+        menge: Number(mat.menge || 0),
+        bewegung: 'rueckbuchung',
+        grund: `Material aus Serviceauftrag entfernt: ${mat.bezeichnung || 'Material'}`,
+        serviceauftragId: id,
+      })
+    }
 
     const { error } = await supabase.from('serviceauftrag_material').delete().eq('id', matId)
 
@@ -316,7 +404,7 @@ function ServiceauftragDetailPageContent() {
       `${mat?.bezeichnung || 'Material'} wurde entfernt.`
     )
 
-    setMeldung('Material wurde gelöscht.')
+    setMeldung('Material wurde gelöscht und ggf. zurückgebucht.')
     laden()
   }
 
@@ -390,7 +478,7 @@ function ServiceauftragDetailPageContent() {
         <div>
           <h1 className="topbar-title">Serviceauftrag bearbeiten</h1>
           <div className="topbar-subtitle">
-            Live-Detailansicht mit Arbeitszeit, Material, Fahrzeugannahme, Timeline und Rechnungserstellung.
+            Live-Detailansicht mit Lagerbuchung, Arbeitszeit, Material, Timeline und Rechnungserstellung.
             {letzteAktualisierung && <> Letzte Aktualisierung: {letzteAktualisierung}</>}
           </div>
         </div>
@@ -513,10 +601,41 @@ function ServiceauftragDetailPageContent() {
         <h2 style={{ marginTop: 0 }}>Material hinzufügen</h2>
 
         <div className="form-row">
+          <input
+            placeholder="Lagerartikel suchen"
+            value={matSuche}
+            onChange={(e) => {
+              setMatSuche(e.target.value)
+              setMatLagerartikelId('')
+            }}
+          />
+
           <input placeholder="Bezeichnung" value={matBezeichnung} onChange={(e) => setMatBezeichnung(e.target.value)} />
           <input placeholder="Menge" value={matMenge} onChange={(e) => setMatMenge(e.target.value)} />
           <input placeholder="Einzelpreis" value={matPreis} onChange={(e) => setMatPreis(e.target.value)} />
         </div>
+
+        {matSuche && !matLagerartikelId && (
+          <div className="list-box" style={{ marginTop: 12 }}>
+            {lagerGefiltert.slice(0, 10).map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => {
+                  setMatLagerartikelId(a.id)
+                  setMatSuche(lagerName(a.id))
+                  setMatBezeichnung(a.name || '')
+                  setMatPreis(String(a.verkaufspreis || 0))
+                }}
+                style={{ margin: 4, background: '#374151' }}
+              >
+                {lagerName(a.id)} · Bestand: {Number(a.bestand || 0).toFixed(2)}
+              </button>
+            ))}
+
+            {lagerGefiltert.length === 0 && <div className="muted">Kein Lagerartikel gefunden.</div>}
+          </div>
+        )}
 
         <div className="action-row">
           <button type="button" onClick={materialHinzufuegen}>
@@ -528,9 +647,13 @@ function ServiceauftragDetailPageContent() {
           <div key={m.id} className="list-box">
             <strong>{m.bezeichnung || '-'}</strong>
             <br />
+            Lagerartikel: {m.lagerartikel_id ? lagerName(m.lagerartikel_id) : 'Manuell'}
+            <br />
             {Number(m.menge || 0).toFixed(2)} × {Number(m.einzelpreis || 0).toFixed(2)} €
             <br />
             Summe: {(Number(m.menge || 0) * Number(m.einzelpreis || 0)).toFixed(2)} €
+            <br />
+            Bestand gebucht: {m.bestand_abgezogen ? 'Ja' : 'Nein'}
 
             <div className="action-row">
               <button type="button" onClick={() => materialLoeschen(m.id)} style={{ background: '#dc2626' }}>
@@ -542,22 +665,10 @@ function ServiceauftragDetailPageContent() {
       </div>
 
       <div className="kpi-strip">
-        <div className="kpi-pill">
-          Arbeitskosten
-          <strong>{arbeitskosten.toFixed(2)} €</strong>
-        </div>
-        <div className="kpi-pill">
-          Materialkosten
-          <strong>{materialkosten.toFixed(2)} €</strong>
-        </div>
-        <div className="kpi-pill">
-          Netto Gesamt
-          <strong>{gesamt.toFixed(2)} €</strong>
-        </div>
-        <div className="kpi-pill">
-          Brutto 19%
-          <strong>{(gesamt * 1.19).toFixed(2)} €</strong>
-        </div>
+        <div className="kpi-pill">Arbeitskosten<strong>{arbeitskosten.toFixed(2)} €</strong></div>
+        <div className="kpi-pill">Materialkosten<strong>{materialkosten.toFixed(2)} €</strong></div>
+        <div className="kpi-pill">Netto Gesamt<strong>{gesamt.toFixed(2)} €</strong></div>
+        <div className="kpi-pill">Brutto 19%<strong>{(gesamt * 1.19).toFixed(2)} €</strong></div>
       </div>
 
       <ServiceTimeline serviceauftragId={id} />

@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import RoleGuard from '../components/RoleGuard'
 import { supabase } from '@/lib/supabase'
+import { useRealtimeTable } from '@/lib/useRealtimeTable'
 
-type Lagerartikel = {
+type Artikel = {
   id: string
   artikelnummer: number | null
   name: string | null
@@ -18,14 +19,14 @@ type Lagerartikel = {
 
 export default function LagerPage() {
   return (
-    <RoleGuard allowedRoles={['Admin', 'Werkstatt', 'Lager', 'Buchhaltung', 'Behördenvertreter']}>
-      <LagerPageContent />
+    <RoleGuard allowedRoles={['Admin', 'Werkstattmeister', 'Lager', 'Werkstatt', 'Behördenvertreter']}>
+      <LagerContent />
     </RoleGuard>
   )
 }
 
-function LagerPageContent() {
-  const [artikelListe, setArtikelListe] = useState<Lagerartikel[]>([])
+function LagerContent() {
+  const [artikel, setArtikel] = useState<Artikel[]>([])
   const [suche, setSuche] = useState('')
 
   const [artikelnummer, setArtikelnummer] = useState('')
@@ -36,68 +37,55 @@ function LagerPageContent() {
   const [einkaufspreis, setEinkaufspreis] = useState('')
   const [verkaufspreis, setVerkaufspreis] = useState('')
   const [lagerort, setLagerort] = useState('')
-
-  const [bewegungArtikelId, setBewegungArtikelId] = useState('')
-  const [bewegungArt, setBewegungArt] = useState('zugang')
-  const [bewegungMenge, setBewegungMenge] = useState('')
-  const [bewegungZielLagerort, setBewegungZielLagerort] = useState('')
-  const [bewegungNotiz, setBewegungNotiz] = useState('')
-
   const [bearbeitenId, setBearbeitenId] = useState<string | null>(null)
-  const [bearbeitenArtikelnummer, setBearbeitenArtikelnummer] = useState('')
-  const [bearbeitenName, setBearbeitenName] = useState('')
-  const [bearbeitenBeschreibung, setBearbeitenBeschreibung] = useState('')
-  const [bearbeitenBestand, setBearbeitenBestand] = useState('')
-  const [bearbeitenMindestbestand, setBearbeitenMindestbestand] = useState('')
-  const [bearbeitenEinkaufspreis, setBearbeitenEinkaufspreis] = useState('')
-  const [bearbeitenVerkaufspreis, setBearbeitenVerkaufspreis] = useState('')
-  const [bearbeitenLagerort, setBearbeitenLagerort] = useState('')
 
-  const [fehler, setFehler] = useState('')
   const [meldung, setMeldung] = useState('')
+  const [fehler, setFehler] = useState('')
+  const [letzteAktualisierung, setLetzteAktualisierung] = useState('')
 
-  async function laden() {
-    setFehler('')
-    const { data, error } = await supabase.from('lagerartikel').select('*')
+  const laden = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('lagerartikel')
+      .select('*')
+      .order('artikelnummer', { ascending: true })
 
     if (error) {
       setFehler(error.message)
       return
     }
 
-    setArtikelListe((data || []) as Lagerartikel[])
-  }
+    setArtikel((data || []) as Artikel[])
+    setLetzteAktualisierung(new Date().toLocaleTimeString('de-DE'))
+  }, [])
 
   useEffect(() => {
     laden()
-  }, [])
+  }, [laden])
 
-  async function erstellen(e: React.FormEvent) {
-    e.preventDefault()
-    setFehler('')
-    setMeldung('')
+  useRealtimeTable('lagerartikel', laden)
+  useRealtimeTable('lagerbewegungen', laden)
 
-    if (!name.trim()) {
-      setFehler('Bitte einen Artikelnamen eingeben.')
-      return
-    }
+  const gefiltert = useMemo(() => {
+    const q = suche.trim().toLowerCase()
 
-    const { error } = await supabase.from('lagerartikel').insert({
-      artikelnummer: artikelnummer ? Number(artikelnummer) : null,
-      name: name.trim(),
-      beschreibung: beschreibung || null,
-      bestand: bestand ? Number(bestand) : 0,
-      mindestbestand: mindestbestand ? Number(mindestbestand) : 0,
-      einkaufspreis: einkaufspreis ? Number(einkaufspreis) : 0,
-      verkaufspreis: verkaufspreis ? Number(verkaufspreis) : 0,
-      lagerort: lagerort || null,
-    })
+    return artikel
+      .filter((a) => {
+        if (!q) return true
 
-    if (error) {
-      setFehler(error.message)
-      return
-    }
+        return [
+          a.artikelnummer,
+          a.name,
+          a.beschreibung,
+          a.lagerort,
+        ]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      })
+      .sort((a, b) => Number(a.artikelnummer || 0) - Number(b.artikelnummer || 0))
+  }, [artikel, suche])
 
+  function resetForm() {
+    setBearbeitenId(null)
     setArtikelnummer('')
     setName('')
     setBeschreibung('')
@@ -106,85 +94,62 @@ function LagerPageContent() {
     setEinkaufspreis('')
     setVerkaufspreis('')
     setLagerort('')
-    setMeldung('Lagerartikel wurde erstellt.')
-    laden()
   }
 
-  function bearbeitenStarten(a: Lagerartikel) {
+  function bearbeitenStarten(a: Artikel) {
     setBearbeitenId(a.id)
-    setBearbeitenArtikelnummer(
-      a.artikelnummer !== null && a.artikelnummer !== undefined ? String(a.artikelnummer) : ''
-    )
-    setBearbeitenName(a.name || '')
-    setBearbeitenBeschreibung(a.beschreibung || '')
-    setBearbeitenBestand(
-      a.bestand !== null && a.bestand !== undefined ? String(a.bestand) : ''
-    )
-    setBearbeitenMindestbestand(
-      a.mindestbestand !== null && a.mindestbestand !== undefined ? String(a.mindestbestand) : ''
-    )
-    setBearbeitenEinkaufspreis(
-      a.einkaufspreis !== null && a.einkaufspreis !== undefined ? String(a.einkaufspreis) : ''
-    )
-    setBearbeitenVerkaufspreis(
-      a.verkaufspreis !== null && a.verkaufspreis !== undefined ? String(a.verkaufspreis) : ''
-    )
-    setBearbeitenLagerort(a.lagerort || '')
+    setArtikelnummer(a.artikelnummer != null ? String(a.artikelnummer) : '')
+    setName(a.name || '')
+    setBeschreibung(a.beschreibung || '')
+    setBestand(a.bestand != null ? String(a.bestand) : '')
+    setMindestbestand(a.mindestbestand != null ? String(a.mindestbestand) : '')
+    setEinkaufspreis(a.einkaufspreis != null ? String(a.einkaufspreis) : '')
+    setVerkaufspreis(a.verkaufspreis != null ? String(a.verkaufspreis) : '')
+    setLagerort(a.lagerort || '')
   }
 
-  function bearbeitenAbbrechen() {
-    setBearbeitenId(null)
-    setBearbeitenArtikelnummer('')
-    setBearbeitenName('')
-    setBearbeitenBeschreibung('')
-    setBearbeitenBestand('')
-    setBearbeitenMindestbestand('')
-    setBearbeitenEinkaufspreis('')
-    setBearbeitenVerkaufspreis('')
-    setBearbeitenLagerort('')
-  }
-
-  async function bearbeitenSpeichern(e: React.FormEvent) {
+  async function speichern(e: React.FormEvent) {
     e.preventDefault()
     setFehler('')
     setMeldung('')
 
-    if (!bearbeitenId) return
-
-    if (!bearbeitenName.trim()) {
-      setFehler('Bitte einen Artikelnamen eingeben.')
+    if (!artikelnummer.trim()) {
+      setFehler('Bitte Artikelnummer eingeben.')
       return
     }
 
-    const { error } = await supabase
-      .from('lagerartikel')
-      .update({
-        artikelnummer: bearbeitenArtikelnummer ? Number(bearbeitenArtikelnummer) : null,
-        name: bearbeitenName.trim(),
-        beschreibung: bearbeitenBeschreibung || null,
-        bestand: bearbeitenBestand ? Number(bearbeitenBestand) : 0,
-        mindestbestand: bearbeitenMindestbestand ? Number(bearbeitenMindestbestand) : 0,
-        einkaufspreis: bearbeitenEinkaufspreis ? Number(bearbeitenEinkaufspreis) : 0,
-        verkaufspreis: bearbeitenVerkaufspreis ? Number(bearbeitenVerkaufspreis) : 0,
-        lagerort: bearbeitenLagerort || null,
-      })
-      .eq('id', bearbeitenId)
-
-    if (error) {
-      setFehler(error.message)
+    if (!name.trim()) {
+      setFehler('Bitte Name eingeben.')
       return
     }
 
-    bearbeitenAbbrechen()
-    setMeldung('Lagerartikel wurde gespeichert.')
+    const payload = {
+      artikelnummer: Number(artikelnummer),
+      name,
+      beschreibung: beschreibung || null,
+      bestand: Number(bestand || 0),
+      mindestbestand: Number(mindestbestand || 0),
+      einkaufspreis: Number(einkaufspreis || 0),
+      verkaufspreis: Number(verkaufspreis || 0),
+      lagerort: lagerort || null,
+    }
+
+    const res = bearbeitenId
+      ? await supabase.from('lagerartikel').update(payload).eq('id', bearbeitenId)
+      : await supabase.from('lagerartikel').insert(payload)
+
+    if (res.error) {
+      setFehler(res.error.message)
+      return
+    }
+
+    setMeldung(bearbeitenId ? 'Artikel wurde gespeichert.' : 'Artikel wurde erstellt.')
+    resetForm()
     laden()
   }
 
   async function loeschen(id: string) {
-    setFehler('')
-    setMeldung('')
-
-    const ok = window.confirm('Lagerartikel wirklich löschen?')
+    const ok = window.confirm('Artikel wirklich löschen?')
     if (!ok) return
 
     const { error } = await supabase.from('lagerartikel').delete().eq('id', id)
@@ -194,327 +159,104 @@ function LagerPageContent() {
       return
     }
 
-    setMeldung('Lagerartikel wurde gelöscht.')
+    setMeldung('Artikel wurde gelöscht.')
     laden()
   }
-
-  async function bestandAnpassen(e: React.FormEvent) {
-    e.preventDefault()
-    setFehler('')
-    setMeldung('')
-
-    if (!bewegungArtikelId) {
-      setFehler('Bitte einen Artikel auswählen.')
-      return
-    }
-
-    if (!bewegungMenge) {
-      setFehler('Bitte eine Menge eingeben.')
-      return
-    }
-
-    const mengeNum = Number(bewegungMenge)
-    const gefundenerArtikel = artikelListe.find((a) => a.id === bewegungArtikelId)
-
-    if (!gefundenerArtikel) {
-      setFehler('Artikel nicht gefunden.')
-      return
-    }
-
-    let neuerBestand = Number(gefundenerArtikel.bestand || 0)
-    let neuerLagerort = gefundenerArtikel.lagerort || null
-
-    if (bewegungArt === 'zugang') {
-      neuerBestand += mengeNum
-    } else if (bewegungArt === 'entnahme') {
-      neuerBestand -= mengeNum
-    } else if (bewegungArt === 'manuell') {
-      neuerBestand = mengeNum
-    } else if (bewegungArt === 'umdisponierung') {
-      neuerLagerort = bewegungZielLagerort || neuerLagerort
-    }
-
-    const { error: updateError } = await supabase
-      .from('lagerartikel')
-      .update({
-        bestand: neuerBestand,
-        lagerort: neuerLagerort,
-      })
-      .eq('id', bewegungArtikelId)
-
-    if (updateError) {
-      setFehler(updateError.message)
-      return
-    }
-
-    await supabase.from('lagerbewegungen').insert({
-      lagerartikel_id: bewegungArtikelId,
-      bewegungsart: bewegungArt,
-      menge: mengeNum,
-      notiz: bewegungNotiz || null,
-      referenz_typ: 'manuell',
-      referenz_id: null,
-    })
-
-    setBewegungArtikelId('')
-    setBewegungArt('zugang')
-    setBewegungMenge('')
-    setBewegungZielLagerort('')
-    setBewegungNotiz('')
-    setMeldung('Bestandsbewegung wurde gespeichert.')
-    laden()
-  }
-
-  const sortiert = useMemo(() => {
-    const q = suche.trim().toLowerCase()
-
-    return [...artikelListe]
-      .filter((a) => {
-        if (!q) return true
-        return [a.name, a.beschreibung, a.artikelnummer, a.lagerort]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q))
-      })
-      .sort((a, b) => Number(a.artikelnummer || 0) - Number(b.artikelnummer || 0))
-  }, [artikelListe, suche])
 
   return (
-    <div className="page-card">
-      <h1>Lager</h1>
-
-      <form onSubmit={erstellen} className="list-box" style={{ marginBottom: 18 }}>
-        <h3 style={{ marginTop: 0 }}>Neuen Lagerartikel anlegen</h3>
-
-        <div className="form-row">
-          <input
-            placeholder="Artikelnummer"
-            value={artikelnummer}
-            onChange={(e) => setArtikelnummer(e.target.value)}
-          />
-          <input
-            placeholder="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-
-        <div style={{ marginTop: 12 }}>
-          <textarea
-            placeholder="Beschreibung"
-            value={beschreibung}
-            onChange={(e) => setBeschreibung(e.target.value)}
-            style={{ width: '100%', minHeight: 80 }}
-          />
-        </div>
-
-        <div className="form-row" style={{ marginTop: 12 }}>
-          <input
-            placeholder="Bestand"
-            value={bestand}
-            onChange={(e) => setBestand(e.target.value)}
-          />
-          <input
-            placeholder="Mindestbestand"
-            value={mindestbestand}
-            onChange={(e) => setMindestbestand(e.target.value)}
-          />
-          <input
-            placeholder="Einkaufspreis"
-            value={einkaufspreis}
-            onChange={(e) => setEinkaufspreis(e.target.value)}
-          />
-          <input
-            placeholder="Verkaufspreis"
-            value={verkaufspreis}
-            onChange={(e) => setVerkaufspreis(e.target.value)}
-          />
-        </div>
-
-        <div className="form-row" style={{ marginTop: 12 }}>
-          <input
-            placeholder="Lagerort"
-            value={lagerort}
-            onChange={(e) => setLagerort(e.target.value)}
-          />
-        </div>
-
-        <div className="action-row">
-          <button type="submit">Artikel anlegen</button>
-        </div>
-      </form>
-
-      <form onSubmit={bestandAnpassen} className="list-box" style={{ marginBottom: 18 }}>
-        <h3 style={{ marginTop: 0 }}>Bestandsanpassung</h3>
-
-        <div className="form-row">
-          <select
-            value={bewegungArtikelId}
-            onChange={(e) => setBewegungArtikelId(e.target.value)}
-          >
-            <option value="">Artikel auswählen</option>
-            {artikelListe
-              .sort((a, b) => Number(a.artikelnummer || 0) - Number(b.artikelnummer || 0))
-              .map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.artikelnummer || '-'} – {a.name || '-'}
-                </option>
-              ))}
-          </select>
-
-          <select value={bewegungArt} onChange={(e) => setBewegungArt(e.target.value)}>
-            <option value="zugang">Bestand hinzufügen</option>
-            <option value="entnahme">Bestand entfernen</option>
-            <option value="manuell">Bestand manuell setzen</option>
-            <option value="umdisponierung">In anderes Lager umdisponieren</option>
-          </select>
-
-          <input
-            placeholder="Menge"
-            value={bewegungMenge}
-            onChange={(e) => setBewegungMenge(e.target.value)}
-          />
-        </div>
-
-        {bewegungArt === 'umdisponierung' && (
-          <div className="form-row" style={{ marginTop: 12 }}>
-            <input
-              placeholder="Ziel-Lagerort"
-              value={bewegungZielLagerort}
-              onChange={(e) => setBewegungZielLagerort(e.target.value)}
-            />
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div className="topbar">
+        <div>
+          <h1 className="topbar-title">Lager</h1>
+          <div className="topbar-subtitle">
+            Live-Bestandsverwaltung nach Artikelnummer.
+            {letzteAktualisierung && <> Letzte Aktualisierung: {letzteAktualisierung}</>}
           </div>
-        )}
-
-        <div style={{ marginTop: 12 }}>
-          <textarea
-            placeholder="Notiz"
-            value={bewegungNotiz}
-            onChange={(e) => setBewegungNotiz(e.target.value)}
-            style={{ width: '100%', minHeight: 70 }}
-          />
         </div>
-
-        <div className="action-row">
-          <button type="submit">Bestandsbewegung speichern</button>
-        </div>
-      </form>
-
-      {bearbeitenId && (
-        <form onSubmit={bearbeitenSpeichern} className="list-box" style={{ marginBottom: 18 }}>
-          <h3 style={{ marginTop: 0 }}>Lagerartikel bearbeiten</h3>
-
-          <div className="form-row">
-            <input
-              placeholder="Artikelnummer"
-              value={bearbeitenArtikelnummer}
-              onChange={(e) => setBearbeitenArtikelnummer(e.target.value)}
-            />
-            <input
-              placeholder="Name"
-              value={bearbeitenName}
-              onChange={(e) => setBearbeitenName(e.target.value)}
-            />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <textarea
-              placeholder="Beschreibung"
-              value={bearbeitenBeschreibung}
-              onChange={(e) => setBearbeitenBeschreibung(e.target.value)}
-              style={{ width: '100%', minHeight: 80 }}
-            />
-          </div>
-
-          <div className="form-row" style={{ marginTop: 12 }}>
-            <input
-              placeholder="Bestand"
-              value={bearbeitenBestand}
-              onChange={(e) => setBearbeitenBestand(e.target.value)}
-            />
-            <input
-              placeholder="Mindestbestand"
-              value={bearbeitenMindestbestand}
-              onChange={(e) => setBearbeitenMindestbestand(e.target.value)}
-            />
-            <input
-              placeholder="Einkaufspreis"
-              value={bearbeitenEinkaufspreis}
-              onChange={(e) => setBearbeitenEinkaufspreis(e.target.value)}
-            />
-            <input
-              placeholder="Verkaufspreis"
-              value={bearbeitenVerkaufspreis}
-              onChange={(e) => setBearbeitenVerkaufspreis(e.target.value)}
-            />
-          </div>
-
-          <div className="form-row" style={{ marginTop: 12 }}>
-            <input
-              placeholder="Lagerort"
-              value={bearbeitenLagerort}
-              onChange={(e) => setBearbeitenLagerort(e.target.value)}
-            />
-          </div>
-
-          <div className="action-row">
-            <button type="submit">Speichern</button>
-            <button type="button" onClick={bearbeitenAbbrechen} style={{ background: '#6b7280' }}>
-              Abbrechen
-            </button>
-          </div>
-        </form>
-      )}
-
-      <div className="form-row" style={{ marginBottom: 16 }}>
-        <input
-          placeholder="Lager durchsuchen"
-          value={suche}
-          onChange={(e) => setSuche(e.target.value)}
-        />
       </div>
 
-      {sortiert.map((a) => {
-        const bestandOk = Number(a.bestand || 0) >= Number(a.mindestbestand || 0)
+      <form onSubmit={speichern} className="page-card">
+        <h2 style={{ marginTop: 0 }}>{bearbeitenId ? 'Artikel bearbeiten' : 'Artikel anlegen'}</h2>
 
-        return (
-          <div
-            key={a.id}
-            className="list-box"
-            style={{
-              background: bestandOk ? 'rgba(22,163,74,0.18)' : 'rgba(220,38,38,0.18)',
-              border: `2px solid ${bestandOk ? '#16a34a' : '#dc2626'}`,
-            }}
-          >
-            <strong>
-              {a.artikelnummer || '-'} – {a.name || '-'}
-            </strong>
-            <br />
-            Beschreibung: {a.beschreibung || '-'}
-            <br />
-            Bestand: {Number(a.bestand || 0).toFixed(2)}
-            <br />
-            Mindestbestand: {Number(a.mindestbestand || 0).toFixed(2)}
-            <br />
-            Einkaufspreis: {Number(a.einkaufspreis || 0).toFixed(2)} €
-            <br />
-            Verkaufspreis: {Number(a.verkaufspreis || 0).toFixed(2)} €
-            <br />
-            Lagerort: {a.lagerort || '-'}
-            <div className="action-row" style={{ marginTop: 10 }}>
-              <button type="button" onClick={() => bearbeitenStarten(a)}>
-                Bearbeiten
-              </button>
-              <button
-                type="button"
-                onClick={() => loeschen(a.id)}
-                style={{ background: '#dc2626' }}
+        <div className="form-row">
+          <input placeholder="Artikelnummer" value={artikelnummer} onChange={(e) => setArtikelnummer(e.target.value)} />
+          <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input placeholder="Lagerort" value={lagerort} onChange={(e) => setLagerort(e.target.value)} />
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <textarea placeholder="Beschreibung" value={beschreibung} onChange={(e) => setBeschreibung(e.target.value)} />
+        </div>
+
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <input placeholder="Bestand" value={bestand} onChange={(e) => setBestand(e.target.value)} />
+          <input placeholder="Mindestbestand" value={mindestbestand} onChange={(e) => setMindestbestand(e.target.value)} />
+          <input placeholder="Einkaufspreis" value={einkaufspreis} onChange={(e) => setEinkaufspreis(e.target.value)} />
+          <input placeholder="Verkaufspreis" value={verkaufspreis} onChange={(e) => setVerkaufspreis(e.target.value)} />
+        </div>
+
+        <div className="action-row">
+          <button type="submit">{bearbeitenId ? 'Speichern' : 'Artikel erstellen'}</button>
+          {bearbeitenId && (
+            <button type="button" onClick={resetForm} style={{ background: '#6b7280' }}>
+              Abbrechen
+            </button>
+          )}
+        </div>
+      </form>
+
+      <div className="page-card">
+        <input placeholder="Lager durchsuchen" value={suche} onChange={(e) => setSuche(e.target.value)} />
+
+        <div style={{ marginTop: 16 }}>
+          {gefiltert.map((a) => {
+            const kritisch = Number(a.bestand || 0) < Number(a.mindestbestand || 0)
+
+            return (
+              <div
+                key={a.id}
+                className="list-box"
+                style={{
+                  border: kritisch ? '2px solid #dc2626' : '2px solid #16a34a',
+                  background: kritisch ? 'rgba(220,38,38,0.13)' : 'rgba(22,163,74,0.10)',
+                }}
               >
-                Löschen
-              </button>
-            </div>
-          </div>
-        )
-      })}
+                <strong>
+                  {a.artikelnummer ?? '-'} – {a.name || '-'}
+                </strong>
+                <br />
+                Beschreibung: {a.beschreibung || '-'}
+                <br />
+                Bestand: <strong>{Number(a.bestand || 0).toFixed(2)}</strong>
+                <br />
+                Mindestbestand: {Number(a.mindestbestand || 0).toFixed(2)}
+                <br />
+                Einkaufspreis: {Number(a.einkaufspreis || 0).toFixed(2)} €
+                <br />
+                Verkaufspreis: {Number(a.verkaufspreis || 0).toFixed(2)} €
+                <br />
+                Lagerort: {a.lagerort || '-'}
+                <br />
+                Status:{' '}
+                <strong style={{ color: kritisch ? '#fecaca' : '#bbf7d0' }}>
+                  {kritisch ? 'Mindestbestand unterschritten' : 'Bestand OK'}
+                </strong>
+
+                <div className="action-row">
+                  <button type="button" onClick={() => bearbeitenStarten(a)}>
+                    Bearbeiten
+                  </button>
+                  <button type="button" onClick={() => loeschen(a.id)} style={{ background: '#dc2626' }}>
+                    Löschen
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+
+          {gefiltert.length === 0 && <div className="muted">Keine Lagerartikel gefunden.</div>}
+        </div>
+      </div>
 
       {meldung && <div className="badge badge-success">{meldung}</div>}
       {fehler && <div className="error-box">{fehler}</div>}
