@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import SidebarUserRole from './SidebarUserRole'
 import BehoerdenAuditTracker from './BehoerdenAuditTracker'
 import SystemModeGuard from './SystemModeGuard'
+import PasswordChangeGuard from './PasswordChangeGuard'
 
 type Benutzerprofil = {
   id: string
@@ -28,6 +29,7 @@ type NavGroup = {
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+
   const [profil, setProfil] = useState<Benutzerprofil | null>(null)
   const [openSection, setOpenSection] = useState<string | null>('uebersicht')
   const [logoutLaden, setLogoutLaden] = useState(false)
@@ -36,8 +38,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     async function laden() {
-      const sessionRes = await supabase.auth.getSession()
-      const userId = sessionRes.data.session?.user?.id
+      const userId = localStorage.getItem('werkstatt_benutzer_id')
 
       if (!userId) {
         setProfil(null)
@@ -54,17 +55,25 @@ export default function AppShell({ children }: { children: ReactNode }) {
     }
 
     laden()
-  }, [])
+  }, [pathname])
 
   async function logout() {
     setLogoutLaden(true)
+
+    localStorage.removeItem('werkstatt_benutzer_id')
+    localStorage.removeItem('werkstatt_benutzername')
+    localStorage.removeItem('werkstatt_rolle')
+    localStorage.removeItem('werkstatt_aktiv')
+    localStorage.removeItem('werkstatt_muss_passwort_aendern')
+
     await supabase.auth.signOut()
+
     router.push('/login')
     router.refresh()
     setLogoutLaden(false)
   }
 
-  const rolle = profil?.rolle || 'Unbekannt'
+  const rolle = profil?.rolle || localStorage.getItem('werkstatt_rolle') || 'Unbekannt'
   const istBehoerde = rolle === 'Behördenvertreter'
   const istAdmin = rolle === 'Admin'
   const istWerkstattmeister = rolle === 'Werkstattmeister'
@@ -134,10 +143,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
       items: [
         { href: '/firmenprofil', label: 'Firmenprofil' },
         { href: '/benutzer', label: 'Benutzer' },
+        { href: '/benutzer/passwort', label: 'Passwortverwaltung' },
         { href: '/einstellungen', label: 'Einstellungen' },
         { href: '/aktivitaetslog', label: 'Aktivitätslog' },
         { href: '/systemstatus', label: 'Systemstatus' },
-        { href: '/benutzer/passwort', label: 'Passwortverwaltung' },
       ],
     }
 
@@ -150,7 +159,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     }
 
     if (istWerkstattmeister) {
-      return [overviewGroup, kundenGroup, serviceGroup, lagerGroup]
+      return [overviewGroup, kundenGroup, serviceGroup, lagerGroup, finanzenGroup]
     }
 
     return [overviewGroup, kundenGroup, serviceGroup, lagerGroup, finanzenGroup]
@@ -160,9 +169,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return (
       <>
         <BehoerdenAuditTracker />
-        <SystemModeGuard>
-          <main>{children}</main>
-        </SystemModeGuard>
+        <PasswordChangeGuard>
+          <SystemModeGuard>
+            <main>{children}</main>
+          </SystemModeGuard>
+        </PasswordChangeGuard>
       </>
     )
   }
@@ -170,10 +181,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <>
       <BehoerdenAuditTracker />
+
       <div className="app-shell">
         <aside className="sidebar">
           <div className="sidebar-brand">
-            <div className="sidebar-brand-top">Werkstatt CRM</div>
+            <div className="sidebar-brand-top">Werkstatt ERP</div>
             <div className="sidebar-brand-sub">
               {istBehoerde
                 ? 'Behördenansicht · Nur Lesemodus'
@@ -223,7 +235,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
               <div className="sidebar-group" key={group.key}>
                 <button
                   className="sidebar-group-title"
-                  onClick={() => setOpenSection((prev) => (prev === group.key ? null : group.key))}
+                  onClick={() =>
+                    setOpenSection((prev) => (prev === group.key ? null : group.key))
+                  }
                   type="button"
                 >
                   <span>{group.label}</span>
@@ -236,6 +250,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   <div className="sidebar-section">
                     {group.items.map((item) => {
                       const active = pathname === item.href
+
                       return (
                         <Link
                           key={item.href}
@@ -243,6 +258,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                           className={`sidebar-link ${active ? 'active' : ''}`}
                         >
                           <span>{item.label}</span>
+
                           {istBehoerde && group.key !== 'uebersicht' && (
                             <span className="sidebar-readonly-badge">RO</span>
                           )}
@@ -257,23 +273,28 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </aside>
 
         <main className={`main-content ${istBehoerde ? 'behoerde-layout' : ''}`}>
-          <SystemModeGuard>
-            {istBehoerde && (
-              <>
-                <div className="behoerde-watermark" aria-hidden="true">
-                  NUR LESEZUGRIFF · BEHÖRDENVERTRETER
-                </div>
-                <div className="behoerde-hinweis">
-                  <div>
-                    <strong>Lesemodus aktiv</strong>
-                    <div>Diese Ansicht ist nur zur Einsicht freigegeben. Änderungen sind nicht erlaubt.</div>
+          <PasswordChangeGuard>
+            <SystemModeGuard>
+              {istBehoerde && (
+                <>
+                  <div className="behoerde-watermark" aria-hidden="true">
+                    NUR LESEZUGRIFF · BEHÖRDENVERTRETER
                   </div>
-                </div>
-              </>
-            )}
 
-            {children}
-          </SystemModeGuard>
+                  <div className="behoerde-hinweis">
+                    <div>
+                      <strong>Lesemodus aktiv</strong>
+                      <div>
+                        Diese Ansicht ist nur zur Einsicht freigegeben. Änderungen sind nicht erlaubt.
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {children}
+            </SystemModeGuard>
+          </PasswordChangeGuard>
         </main>
       </div>
     </>

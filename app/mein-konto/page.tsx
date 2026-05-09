@@ -40,8 +40,7 @@ function MeinKontoContent() {
   const laden = useCallback(async () => {
     setFehler('')
 
-    const sessionRes = await supabase.auth.getSession()
-    const userId = sessionRes.data.session?.user?.id
+    const userId = localStorage.getItem('werkstatt_benutzer_id')
 
     if (!userId) {
       setFehler('Keine aktive Sitzung gefunden.')
@@ -59,7 +58,16 @@ function MeinKontoContent() {
       return
     }
 
-    setProfil((data as Profil | null) || null)
+    const p = (data as Profil | null) || null
+    setProfil(p)
+
+    if (p) {
+      localStorage.setItem('werkstatt_benutzername', p.benutzername || '')
+      localStorage.setItem('werkstatt_rolle', p.rolle || '')
+      localStorage.setItem('werkstatt_aktiv', String(p.aktiv !== false))
+      localStorage.setItem('werkstatt_muss_passwort_aendern', String(Boolean(p.muss_passwort_aendern)))
+    }
+
     setLetzteAktualisierung(new Date().toLocaleTimeString('de-DE'))
   }, [])
 
@@ -74,6 +82,13 @@ function MeinKontoContent() {
     setFehler('')
     setMeldung('')
 
+    const userId = localStorage.getItem('werkstatt_benutzer_id')
+
+    if (!userId) {
+      setFehler('Keine aktive Sitzung gefunden.')
+      return
+    }
+
     if (neuesPasswort.length < 8) {
       setFehler('Das neue Passwort muss mindestens 8 Zeichen lang sein.')
       return
@@ -85,6 +100,7 @@ function MeinKontoContent() {
     }
 
     const { data, error } = await supabase.rpc('eigenes_passwort_aendern', {
+      p_benutzer_id: userId,
       p_altes_passwort: altesPasswort,
       p_neues_passwort: neuesPasswort,
     })
@@ -100,6 +116,8 @@ function MeinKontoContent() {
       setFehler(result.message)
       return
     }
+
+    localStorage.setItem('werkstatt_muss_passwort_aendern', 'false')
 
     setAltesPasswort('')
     setNeuesPasswort('')
