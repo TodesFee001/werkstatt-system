@@ -14,7 +14,7 @@ type LoginResult = {
     rolle: string
     aktiv: boolean
     muss_passwort_aendern: boolean
-    nur_eine_sitzung: boolean
+    nur_eine_sitzung?: boolean
   }
 }
 
@@ -45,18 +45,20 @@ export default function LoginPage() {
 
     const result = data as LoginResult
 
-    if (!result.ok || !result.benutzer || !result.sitzung_token) {
+    if (!result.ok || !result.benutzer) {
       setFehler(result.message || 'Login fehlgeschlagen.')
       return
     }
+
+    localStorage.clear()
 
     localStorage.setItem('werkstatt_benutzer_id', result.benutzer.id)
     localStorage.setItem('werkstatt_benutzername', result.benutzer.benutzername)
     localStorage.setItem('werkstatt_rolle', result.benutzer.rolle)
     localStorage.setItem('werkstatt_aktiv', String(result.benutzer.aktiv))
     localStorage.setItem('werkstatt_muss_passwort_aendern', String(result.benutzer.muss_passwort_aendern))
-    localStorage.setItem('werkstatt_nur_eine_sitzung', String(result.benutzer.nur_eine_sitzung))
-    localStorage.setItem('werkstatt_sitzung_token', result.sitzung_token)
+    localStorage.setItem('werkstatt_nur_eine_sitzung', String(Boolean(result.benutzer.nur_eine_sitzung)))
+    localStorage.setItem('werkstatt_sitzung_token', result.sitzung_token || 'session-disabled')
 
     if (result.benutzer.muss_passwort_aendern) {
       router.push('/mein-konto')
@@ -89,38 +91,17 @@ export default function LoginPage() {
           boxShadow: '0 20px 80px rgba(0,0,0,0.55)',
         }}
       >
-        <div
-          style={{
-            marginBottom: 22,
-            borderBottom: '1px solid rgba(245,158,11,0.25)',
-            paddingBottom: 18,
-          }}
-        >
-          <div
-            style={{
-              color: '#f59e0b',
-              fontWeight: 1000,
-              fontSize: 13,
-              letterSpacing: 2,
-              textTransform: 'uppercase',
-            }}
-          >
+        <div style={{ marginBottom: 22, borderBottom: '1px solid rgba(245,158,11,0.25)', paddingBottom: 18 }}>
+          <div style={{ color: '#f59e0b', fontWeight: 1000, fontSize: 13, letterSpacing: 2, textTransform: 'uppercase' }}>
             Werkstatt ERP
           </div>
 
-          <h1
-            style={{
-              margin: '8px 0 0',
-              color: '#fff',
-              fontSize: 32,
-              fontWeight: 1000,
-            }}
-          >
+          <h1 style={{ margin: '8px 0 0', color: '#fff', fontSize: 32, fontWeight: 1000 }}>
             Interner Login
           </h1>
 
           <p style={{ color: '#9ca3af', marginBottom: 0 }}>
-            Anmeldung ausschließlich mit Benutzername und Passwort.
+            Anmeldung mit Benutzername und Passwort.
           </p>
         </div>
 
@@ -160,17 +141,6 @@ export default function LoginPage() {
         >
           {laden ? 'Login läuft ...' : 'Einloggen'}
         </button>
-
-        <div
-          style={{
-            marginTop: 18,
-            color: '#6b7280',
-            fontSize: 12,
-            textAlign: 'center',
-          }}
-        >
-          Zugriff nur für berechtigte interne Benutzer.
-        </div>
       </form>
     </main>
   )
