@@ -8,6 +8,7 @@ import SidebarUserRole from './SidebarUserRole'
 import BehoerdenAuditTracker from './BehoerdenAuditTracker'
 import SystemModeGuard from './SystemModeGuard'
 import PasswordChangeGuard from './PasswordChangeGuard'
+import SessionGuard from './SessionGuard'
 
 type Benutzerprofil = {
   id: string
@@ -38,6 +39,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     async function laden() {
+      if (typeof window === 'undefined') return
+
       const userId = localStorage.getItem('werkstatt_benutzer_id')
 
       if (!userId) {
@@ -60,11 +63,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
   async function logout() {
     setLogoutLaden(true)
 
-    localStorage.removeItem('werkstatt_benutzer_id')
-    localStorage.removeItem('werkstatt_benutzername')
-    localStorage.removeItem('werkstatt_rolle')
-    localStorage.removeItem('werkstatt_aktiv')
-    localStorage.removeItem('werkstatt_muss_passwort_aendern')
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('werkstatt_benutzer_id')
+      localStorage.removeItem('werkstatt_benutzername')
+      localStorage.removeItem('werkstatt_rolle')
+      localStorage.removeItem('werkstatt_aktiv')
+      localStorage.removeItem('werkstatt_muss_passwort_aendern')
+      localStorage.removeItem('werkstatt_nur_eine_sitzung')
+      localStorage.removeItem('werkstatt_sitzung_token')
+    }
 
     await supabase.auth.signOut()
 
@@ -74,9 +81,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }
 
   const rolle =
-  profil?.rolle ||
-  (typeof window !== 'undefined' ? localStorage.getItem('werkstatt_rolle') : null) ||
-  'Unbekannt'
+    profil?.rolle ||
+    (typeof window !== 'undefined' ? localStorage.getItem('werkstatt_rolle') : null) ||
+    'Unbekannt'
+
   const istBehoerde = rolle === 'Behördenvertreter'
   const istAdmin = rolle === 'Admin'
   const istWerkstattmeister = rolle === 'Werkstattmeister'
@@ -147,6 +155,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         { href: '/firmenprofil', label: 'Firmenprofil' },
         { href: '/benutzer', label: 'Benutzer' },
         { href: '/benutzer/passwort', label: 'Passwortverwaltung' },
+        { href: '/benutzer/sitzungen', label: 'Sitzungsverwaltung' },
         { href: '/einstellungen', label: 'Einstellungen' },
         { href: '/aktivitaetslog', label: 'Aktivitätslog' },
         { href: '/systemstatus', label: 'Systemstatus' },
@@ -172,11 +181,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return (
       <>
         <BehoerdenAuditTracker />
-        <PasswordChangeGuard>
-          <SystemModeGuard>
-            <main>{children}</main>
-          </SystemModeGuard>
-        </PasswordChangeGuard>
+        <SessionGuard>
+          <PasswordChangeGuard>
+            <SystemModeGuard>
+              <main>{children}</main>
+            </SystemModeGuard>
+          </PasswordChangeGuard>
+        </SessionGuard>
       </>
     )
   }
@@ -276,28 +287,30 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </aside>
 
         <main className={`main-content ${istBehoerde ? 'behoerde-layout' : ''}`}>
-          <PasswordChangeGuard>
-            <SystemModeGuard>
-              {istBehoerde && (
-                <>
-                  <div className="behoerde-watermark" aria-hidden="true">
-                    NUR LESEZUGRIFF · BEHÖRDENVERTRETER
-                  </div>
+          <SessionGuard>
+            <PasswordChangeGuard>
+              <SystemModeGuard>
+                {istBehoerde && (
+                  <>
+                    <div className="behoerde-watermark" aria-hidden="true">
+                      NUR LESEZUGRIFF · BEHÖRDENVERTRETER
+                    </div>
 
-                  <div className="behoerde-hinweis">
-                    <div>
-                      <strong>Lesemodus aktiv</strong>
+                    <div className="behoerde-hinweis">
                       <div>
-                        Diese Ansicht ist nur zur Einsicht freigegeben. Änderungen sind nicht erlaubt.
+                        <strong>Lesemodus aktiv</strong>
+                        <div>
+                          Diese Ansicht ist nur zur Einsicht freigegeben. Änderungen sind nicht erlaubt.
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
 
-              {children}
-            </SystemModeGuard>
-          </PasswordChangeGuard>
+                {children}
+              </SystemModeGuard>
+            </PasswordChangeGuard>
+          </SessionGuard>
         </main>
       </div>
     </>

@@ -7,12 +7,14 @@ import { supabase } from '@/lib/supabase'
 type LoginResult = {
   ok: boolean
   message: string
+  sitzung_token?: string
   benutzer?: {
     id: string
     benutzername: string
     rolle: string
     aktiv: boolean
     muss_passwort_aendern: boolean
+    nur_eine_sitzung: boolean
   }
 }
 
@@ -43,7 +45,7 @@ export default function LoginPage() {
 
     const result = data as LoginResult
 
-    if (!result.ok || !result.benutzer) {
+    if (!result.ok || !result.benutzer || !result.sitzung_token) {
       setFehler(result.message || 'Login fehlgeschlagen.')
       return
     }
@@ -53,6 +55,8 @@ export default function LoginPage() {
     localStorage.setItem('werkstatt_rolle', result.benutzer.rolle)
     localStorage.setItem('werkstatt_aktiv', String(result.benutzer.aktiv))
     localStorage.setItem('werkstatt_muss_passwort_aendern', String(result.benutzer.muss_passwort_aendern))
+    localStorage.setItem('werkstatt_nur_eine_sitzung', String(result.benutzer.nur_eine_sitzung))
+    localStorage.setItem('werkstatt_sitzung_token', result.sitzung_token)
 
     if (result.benutzer.muss_passwort_aendern) {
       router.push('/mein-konto')
