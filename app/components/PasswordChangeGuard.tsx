@@ -6,43 +6,25 @@ import { usePathname, useRouter } from 'next/navigation'
 export default function PasswordChangeGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const [geprueft, setGeprueft] = useState(false)
+  const [bereit, setBereit] = useState(false)
 
   useEffect(() => {
-    const istLogin = pathname === '/login'
-    const istMeinKonto = pathname === '/mein-konto'
-
-    if (istLogin) {
-      setGeprueft(true)
+    if (pathname === '/login') {
+      setBereit(true)
       return
     }
 
-    const benutzerId = localStorage.getItem('werkstatt_benutzer_id')
-    const aktiv = localStorage.getItem('werkstatt_aktiv')
-    const mussPasswortAendern = localStorage.getItem('werkstatt_muss_passwort_aendern')
+    const muss = localStorage.getItem('werkstatt_muss_passwort_aendern')
 
-    if (!benutzerId) {
-      router.push('/login')
-      return
-    }
-
-    if (aktiv === 'false') {
-      localStorage.clear()
-      router.push('/login')
-      return
-    }
-
-    if (mussPasswortAendern === 'true' && !istMeinKonto) {
+    if (muss === 'true' && pathname !== '/mein-konto') {
       router.push('/mein-konto')
       return
     }
 
-    setGeprueft(true)
+    setBereit(true)
   }, [pathname, router])
 
-  if (!geprueft) {
-    return null
-  }
+  if (!bereit) return null
 
   return <>{children}</>
 }
