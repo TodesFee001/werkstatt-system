@@ -9,6 +9,7 @@ import BehoerdenAuditTracker from './BehoerdenAuditTracker'
 import SystemModeGuard from './SystemModeGuard'
 import PasswordChangeGuard from './PasswordChangeGuard'
 import SessionGuard from './SessionGuard'
+import SessionWatcher from './SessionWatcher'
 
 type Benutzerprofil = {
   id: string
@@ -180,6 +181,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   if (hideSidebar) {
     return (
       <>
+        <SessionWatcher />
         <BehoerdenAuditTracker />
         <SessionGuard>
           <PasswordChangeGuard>
@@ -194,6 +196,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <>
+      <SessionWatcher />
       <BehoerdenAuditTracker />
 
       <div className="app-shell">
