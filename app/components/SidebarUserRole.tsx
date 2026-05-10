@@ -1,50 +1,33 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-
-type Benutzerprofil = {
-  id: string
-  rolle: string | null
-  aktiv: boolean | null
-  benutzername: string | null
-}
 
 export default function SidebarUserRole() {
-  const [profil, setProfil] = useState<Benutzerprofil | null>(null)
+  const [benutzername, setBenutzername] = useState('Unbekannt')
+  const [rolle, setRolle] = useState('Unbekannt')
 
   useEffect(() => {
-    async function laden() {
-      const sessionRes = await supabase.auth.getSession()
-      const userId = sessionRes.data.session?.user?.id
-
-      if (!userId) {
-        setProfil(null)
-        return
-      }
-
-      const { data } = await supabase
-        .from('benutzerprofile')
-        .select('id, rolle, aktiv, benutzername')
-        .eq('id', userId)
-        .maybeSingle()
-
-      setProfil((data as Benutzerprofil | null) || null)
+    function laden() {
+      setBenutzername(localStorage.getItem('werkstatt_benutzername') || 'Unbekannt')
+      setRolle(localStorage.getItem('werkstatt_rolle') || 'Unbekannt')
     }
 
     laden()
+
+    window.addEventListener('storage', laden)
+    window.addEventListener('focus', laden)
+
+    return () => {
+      window.removeEventListener('storage', laden)
+      window.removeEventListener('focus', laden)
+    }
   }, [])
 
   return (
     <div className="sidebar-user-card">
       <div className="sidebar-user-label">Angemeldeter Zugang</div>
-      <div className="sidebar-user-name">{profil?.benutzername || 'Unbekannt'}</div>
-      <div className="sidebar-user-role-row">
-        <span className="sidebar-user-role">{profil?.rolle || 'Unbekannt'}</span>
-        <span className={`sidebar-user-status ${profil?.aktiv === false ? 'off' : 'on'}`}>
-          {profil?.aktiv === false ? 'Inaktiv' : 'Aktiv'}
-        </span>
-      </div>
+      <div className="sidebar-user-name">{benutzername}</div>
+      <div className="sidebar-user-role">{rolle}</div>
     </div>
   )
 }
