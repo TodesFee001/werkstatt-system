@@ -4,7 +4,7 @@ import { ReactNode, useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-type BenutzerProfil = {
+type Profil = {
   id: string
   benutzername: string | null
   rolle: string | null
@@ -24,9 +24,13 @@ export default function SessionGuard({ children }: { children: ReactNode }) {
   const [bereit, setBereit] = useState(false)
 
   useEffect(() => {
+    let mounted = true
+
     async function pruefen() {
+      setBereit(false)
+
       if (pathname === '/login') {
-        setBereit(true)
+        if (mounted) setBereit(true)
         return
       }
 
@@ -38,19 +42,19 @@ export default function SessionGuard({ children }: { children: ReactNode }) {
         return
       }
 
-      const profilRes = await supabase
+      const { data, error } = await supabase
         .from('benutzerprofile')
         .select('id, benutzername, rolle, aktiv, muss_passwort_aendern, nur_eine_sitzung')
         .eq('id', benutzerId)
         .maybeSingle()
 
-      if (profilRes.error || !profilRes.data) {
+      if (error || !data) {
         localStorage.clear()
         router.push('/login')
         return
       }
 
-      const profil = profilRes.data as BenutzerProfil
+      const profil = data as Profil
 
       if (profil.aktiv === false) {
         alert('Dein Benutzer wurde deaktiviert.')
@@ -61,31 +65,36 @@ export default function SessionGuard({ children }: { children: ReactNode }) {
 
       localStorage.setItem('werkstatt_benutzername', profil.benutzername || '')
       localStorage.setItem('werkstatt_rolle', profil.rolle || '')
-      localStorage.setItem('werkstatt_aktiv', String(profil.aktiv !== true))
+      localStorage.setItem('werkstatt_aktiv', String(profil.aktiv ?? true))
       localStorage.setItem('werkstatt_muss_passwort_aendern', String(Boolean(profil.muss_passwort_aendern)))
       localStorage.setItem('werkstatt_nur_eine_sitzung', String(Boolean(profil.nur_eine_sitzung)))
 
-      if (profil.nur_eine_sitzung) {
-        const sitzungToken = localStorage.getItem('werkstatt_sitzung_token')
+      if (profil.muss_passwort_aendern && pathname !== '/mein-konto') {
+        router.push('/mein-konto')
+        return
+      }
 
-        if (!sitzungToken) {
+      if (profil.nur_eine_sitzung === true) {
+        const token = localStorage.getItem('werkstatt_sitzung_token')
+
+        if (!token) {
           localStorage.clear()
           router.push('/login')
           return
         }
 
-        const { data, error } = await supabase.rpc('pruefe_benutzer_sitzung', {
+        const sessionRes = await supabase.rpc('pruefe_benutzer_sitzung', {
           p_benutzer_id: benutzerId,
-          p_sitzung_token: sitzungToken,
+          p_sitzung_token: token,
         })
 
-        if (error) {
+        if (sessionRes.error) {
           localStorage.clear()
           router.push('/login')
           return
         }
 
-        const result = data as SessionResult
+        const result = sessionRes.data as SessionResult
 
         if (!result.ok) {
           alert(result.message || 'Deine Sitzung wurde beendet.')
@@ -95,15 +104,14 @@ export default function SessionGuard({ children }: { children: ReactNode }) {
         }
       }
 
-      if (profil.muss_passwort_aendern && pathname !== '/mein-konto') {
-        router.push('/mein-konto')
-        return
-      }
-
-      setBereit(true)
+      if (mounted) setBereit(true)
     }
 
     pruefen()
+
+    return () => {
+      mounted = false
+    }
   }, [pathname, router])
 
   useEffect(() => {
@@ -114,15 +122,15 @@ export default function SessionGuard({ children }: { children: ReactNode }) {
 
       if (!benutzerId) return
 
-      const profilRes = await supabase
+      const { data, error } = await supabase
         .from('benutzerprofile')
         .select('aktiv, nur_eine_sitzung')
         .eq('id', benutzerId)
         .maybeSingle()
 
-      if (profilRes.error || !profilRes.data) return
+      if (error || !data) return
 
-      const profil = profilRes.data as {
+      const profil = data as {
         aktiv: boolean | null
         nur_eine_sitzung: boolean | null
       }
@@ -134,20 +142,26 @@ export default function SessionGuard({ children }: { children: ReactNode }) {
         return
       }
 
-      if (!profil.nur_eine_sitzung) return
+      if (profil.nur_eine_sitzung !== true) {
+        return
+      }
 
-      const sitzungToken = localStorage.getItem('werkstatt_sitzung_token')
+      const token = localStorage.getItem('werkstatt_sitzung_token')
 
-      if (!sitzungToken) return
+      if (!token) {
+        localStorage.clear()
+        router.push('/login')
+        return
+      }
 
-      const { data, error } = await supabase.rpc('pruefe_benutzer_sitzung', {
+      const sessionRes = await supabase.rpc('pruefe_benutzer_sitzung', {
         p_benutzer_id: benutzerId,
-        p_sitzung_token: sitzungToken,
+        p_sitzung_token: token,
       })
 
-      if (error) return
+      if (sessionRes.error) return
 
-      const result = data as SessionResult
+      const result = sessionRes.data as SessionResult
 
       if (!result.ok) {
         alert(result.message || 'Deine Sitzung wurde beendet.')
