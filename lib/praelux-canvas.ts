@@ -5,28 +5,26 @@ export const A4_HEIGHT = 1754
 
 const palette = {
   paper: '#ffffff',
-  paperSoft: '#f6f8f9',
+  paperSoft: '#f8fafb',
   navy: '#0a1f38',
-  navy2: '#12365a',
+  navy2: '#173c62',
   navySoft: '#e9eef4',
   gold: '#c7a35c',
-  goldSoft: '#f7efd9',
+  goldDark: '#a98235',
+  goldSoft: '#fbf5e6',
   green: '#17764d',
-  greenSoft: '#e8f5ed',
+  greenSoft: '#e9f6ef',
+  teal: '#247477',
   amber: '#b88221',
   amberSoft: '#fff3d5',
   red: '#a93c3c',
   redSoft: '#f9e5e5',
   ink: '#102236',
   muted: '#637184',
-  line: '#d8e1ea',
+  line: '#d9e1e8',
 }
 
 type TextOptions = {
-  color?: string
-  align?: CanvasTextAlign
-  weight?: number
-  size?: number
   lineHeight?: number
   maxLines?: number
 }
@@ -64,275 +62,339 @@ export function drawPraeLuxOverview(canvas: HTMLCanvasElement, data: OverviewDat
 }
 
 function drawHeader(ctx: CanvasRenderingContext2D, data: OverviewData) {
-  gradientRect(ctx, 0, 0, A4_WIDTH, 210, palette.navy, palette.navy2)
-  ctx.fillStyle = 'rgba(199, 163, 92, 0.2)'
-  ctx.fillRect(0, 188, A4_WIDTH, 6)
-  ctx.fillStyle = palette.gold
-  ctx.fillRect(70, 188, 420, 6)
+  drawLogo(ctx, A4_WIDTH / 2, 55)
 
-  setFont(ctx, 34, 800)
-  ctx.fillStyle = palette.paper
-  ctx.fillText('PraeLux', 70, 58)
-  drawAnchor(ctx, 226, 44, 20, palette.gold)
+  setFont(ctx, 43, 900)
+  ctx.fillStyle = palette.navy
+  drawSingleLine(ctx, 'Gesamtvorteil des neuen Konzepts', A4_WIDTH / 2, 136, 960, 'center')
 
-  setFont(ctx, 46, 800)
-  ctx.fillStyle = palette.paper
-  ctx.fillText('Gesamtvorteil des neuen Konzepts', 70, 115)
+  setFont(ctx, 20, 800)
+  ctx.fillStyle = palette.goldDark
+  drawSingleLine(ctx, data.subtitle, A4_WIDTH / 2, 178, 930, 'center')
 
-  setFont(ctx, 21, 700)
-  ctx.fillStyle = palette.gold
-  drawSingleLine(ctx, data.subtitle, 70, 150, 860)
-
-  setFont(ctx, 17, 400)
-  ctx.fillStyle = 'rgba(255,255,255,0.88)'
-  drawWrappedText(ctx, data.intro, 70, 177, 880, { lineHeight: 22, maxLines: 2 })
-
-  drawQualityMeter(ctx, data)
+  setFont(ctx, 16, 500)
+  ctx.fillStyle = palette.muted
+  drawWrappedText(ctx, data.intro, 180, 212, 880, { lineHeight: 22, maxLines: 2 }, 'center')
 }
 
-function drawQualityMeter(ctx: CanvasRenderingContext2D, data: OverviewData) {
-  const okCount = data.qualityChecks.filter((check) => check.ok).length
-  const total = data.qualityChecks.length
-  const rect = { x: 950, y: 42, w: 220, h: 112 }
-  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 16, 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.16)')
-  setFont(ctx, 13, 700)
-  ctx.fillStyle = 'rgba(255,255,255,0.74)'
-  ctx.fillText('Datenstatus', rect.x + 18, rect.y + 28)
-  setFont(ctx, 38, 800)
-  ctx.fillStyle = okCount === total ? palette.gold : palette.paper
-  ctx.fillText(`${okCount}/${total}`, rect.x + 18, rect.y + 70)
-  setFont(ctx, 13, 500)
-  ctx.fillStyle = 'rgba(255,255,255,0.76)'
-  drawWrappedText(ctx, okCount === total ? 'vollständig erkannt' : 'fehlende Werte markiert', rect.x + 92, rect.y + 52, 104, {
-    lineHeight: 17,
-    maxLines: 2,
-  })
+function drawLogo(ctx: CanvasRenderingContext2D, centerX: number, y: number) {
+  drawAnchor(ctx, centerX, y - 18, 16, palette.gold)
+
+  setFont(ctx, 31, 900)
+  const left = 'PRAE'
+  const right = 'LUX'
+  const leftWidth = ctx.measureText(left).width
+  const rightWidth = ctx.measureText(right).width
+  const start = centerX - (leftWidth + rightWidth) / 2
+  ctx.fillStyle = palette.navy
+  ctx.fillText(left, start, y + 34)
+  ctx.fillStyle = '#8b96a3'
+  ctx.fillText(right, start + leftWidth, y + 34)
 }
 
 function drawFactStrip(ctx: CanvasRenderingContext2D, facts: FactField[]) {
-  const startX = 70
-  const startY = 235
-  const gap = 10
-  const columns = 4
-  const cardW = (1100 - gap * (columns - 1)) / columns
-  const cardH = 64
+  const rect = { x: 70, y: 252, w: 1100, h: 88 }
+  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, palette.paperSoft, palette.line)
 
-  facts.forEach((fact, index) => {
-    const col = index % columns
-    const row = Math.floor(index / columns)
-    const x = startX + col * (cardW + gap)
-    const y = startY + row * (cardH + gap)
-    roundedRect(ctx, x, y, cardW, cardH, 12, palette.paperSoft, palette.line)
-    setFont(ctx, 12, 800)
+  const cards = facts.slice(0, 5)
+  const itemW = rect.w / cards.length
+  cards.forEach((fact, index) => {
+    const x = rect.x + index * itemW
+    if (index > 0) {
+      ctx.strokeStyle = palette.line
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(x, rect.y + 18)
+      ctx.lineTo(x, rect.y + rect.h - 18)
+      ctx.stroke()
+    }
+
+    drawFactIcon(ctx, x + 28, rect.y + 45, index, fact.status)
+    setFont(ctx, 11, 900)
     ctx.fillStyle = palette.muted
-    ctx.fillText(fact.label.toUpperCase(), x + 14, y + 22)
-    setFont(ctx, 19, 800)
-    ctx.fillStyle = fact.status === 'present' ? palette.ink : palette.red
-    drawSingleLine(ctx, fact.value, x + 14, y + 48, cardW - 28)
+    drawSingleLine(ctx, fact.label.toUpperCase(), x + 56, rect.y + 34, itemW - 72)
+    setFont(ctx, 17, 900)
+    ctx.fillStyle = fact.status === 'present' ? palette.ink : fact.status === 'check' ? palette.amber : palette.red
+    drawSingleLine(ctx, fact.value, x + 56, rect.y + 60, itemW - 72)
   })
 }
 
 function drawConceptBoxes(ctx: CanvasRenderingContext2D, data: OverviewData) {
-  const y = 405
-  const gap = 20
+  const y = 386
+  const gap = 18
   const w = (1100 - gap * 2) / 3
-  drawMetricBox(ctx, { x: 70, y, w, h: 210 }, 'Bestandsaufnahme', data.existing.monthlyLabel, data.existing.yearlyLabel, data.existing.note, 'neutral')
+  drawMetricBox(ctx, { x: 70, y, w, h: 210 }, '1', 'Bestandsaufnahme', data.existing, palette.navy)
   drawMetricBox(
     ctx,
     { x: 70 + w + gap, y, w, h: 210 },
+    '2',
     'Empfohlenes Konzept',
-    data.recommended.monthlyLabel,
-    data.recommended.yearlyLabel,
-    data.recommended.note,
-    'gold',
+    data.recommended,
+    palette.navy,
   )
-  drawMetricBox(
-    ctx,
-    { x: 70 + (w + gap) * 2, y, w, h: 210 },
-    'Direkte Veränderung',
-    data.impact.monthlyLabel,
-    data.impact.yearlyLabel,
-    data.impact.explanation,
-    data.impact.type === 'saving' ? 'green' : data.impact.type === 'extra' ? 'gold' : 'neutral',
-  )
+  drawImpactBox(ctx, { x: 70 + (w + gap) * 2, y, w, h: 210 }, data)
 }
 
 function drawMetricBox(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
+  number: string,
   title: string,
-  primary: string,
-  secondary: string,
-  note: string,
-  tone: 'neutral' | 'green' | 'gold',
+  values: { monthlyLabel: string; yearlyLabel: string; note: string },
+  accent: string,
 ) {
-  const fill = tone === 'green' ? palette.greenSoft : tone === 'gold' ? palette.goldSoft : palette.paper
-  const accent = tone === 'green' ? palette.green : tone === 'gold' ? palette.gold : palette.navy2
-  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, fill, palette.line)
-  ctx.fillStyle = accent
-  roundPath(ctx, rect.x, rect.y, rect.w, 10, 18)
-  ctx.fill()
+  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, palette.paper, palette.line)
+  drawBoxHeader(ctx, rect, number, title, accent)
 
-  setFont(ctx, 18, 800)
-  ctx.fillStyle = palette.ink
-  ctx.fillText(title, rect.x + 24, rect.y + 42)
-
-  setFont(ctx, 33, 900)
-  ctx.fillStyle = accent
-  drawSingleLine(ctx, primary, rect.x + 24, rect.y + 92, rect.w - 48)
-
-  setFont(ctx, 21, 800)
-  ctx.fillStyle = palette.ink
-  drawSingleLine(ctx, secondary, rect.x + 24, rect.y + 126, rect.w - 48)
-
-  setFont(ctx, 15, 500)
+  setFont(ctx, 13, 900)
   ctx.fillStyle = palette.muted
-  drawWrappedText(ctx, note, rect.x + 24, rect.y + 160, rect.w - 48, { lineHeight: 20, maxLines: 2 })
+  ctx.fillText('MONATLICH', rect.x + 24, rect.y + 88)
+  setFont(ctx, 31, 900)
+  ctx.fillStyle = palette.ink
+  drawSingleLine(ctx, values.monthlyLabel, rect.x + 24, rect.y + 124, rect.w - 48)
+
+  setFont(ctx, 13, 900)
+  ctx.fillStyle = palette.muted
+  ctx.fillText('JÄHRLICH', rect.x + 24, rect.y + 154)
+  setFont(ctx, 20, 900)
+  ctx.fillStyle = accent
+  drawSingleLine(ctx, values.yearlyLabel, rect.x + 24, rect.y + 181, rect.w - 48)
+}
+
+function drawImpactBox(ctx: CanvasRenderingContext2D, rect: Rect, data: OverviewData) {
+  const accent = data.impact.type === 'saving' ? palette.gold : data.impact.type === 'extra' ? palette.amber : palette.navy
+  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, data.impact.type === 'saving' ? palette.goldSoft : palette.paper, palette.line)
+  drawBoxHeader(ctx, rect, '3', 'Direkte Veränderung', accent)
+
+  setFont(ctx, 13, 900)
+  ctx.fillStyle = palette.muted
+  ctx.fillText('MONATLICH', rect.x + 24, rect.y + 88)
+  setFont(ctx, 29, 900)
+  ctx.fillStyle = data.impact.type === 'extra' ? palette.amber : accent
+  drawSingleLine(ctx, data.impact.monthlyLabel, rect.x + 24, rect.y + 124, rect.w - 48)
+
+  setFont(ctx, 13, 900)
+  ctx.fillStyle = palette.muted
+  ctx.fillText('JÄHRLICH', rect.x + 24, rect.y + 154)
+  setFont(ctx, 20, 900)
+  ctx.fillStyle = data.impact.type === 'extra' ? palette.amber : palette.ink
+  drawSingleLine(ctx, data.impact.yearlyLabel, rect.x + 24, rect.y + 181, rect.w - 48)
+}
+
+function drawBoxHeader(ctx: CanvasRenderingContext2D, rect: Rect, number: string, title: string, color: string) {
+  ctx.save()
+  roundPath(ctx, rect.x, rect.y, rect.w, rect.h, 18)
+  ctx.clip()
+  ctx.fillStyle = color
+  ctx.fillRect(rect.x, rect.y, rect.w, 58)
+  ctx.restore()
+
+  ctx.fillStyle = palette.paper
+  ctx.beginPath()
+  ctx.arc(rect.x + 31, rect.y + 29, 15, 0, Math.PI * 2)
+  ctx.fill()
+  setFont(ctx, 15, 900)
+  ctx.fillStyle = color
+  drawSingleLine(ctx, number, rect.x + 31, rect.y + 35, 24, 'center')
+
+  setFont(ctx, 18, 900)
+  ctx.fillStyle = palette.paper
+  drawSingleLine(ctx, title, rect.x + 56, rect.y + 36, rect.w - 76)
 }
 
 function drawChanges(ctx: CanvasRenderingContext2D, changes: ProductChange[]) {
-  const sectionY = 668
-  setFont(ctx, 27, 900)
-  ctx.fillStyle = palette.ink
-  ctx.fillText('Wesentliche Veränderungen', 70, sectionY)
+  drawSectionTitle(ctx, '4', 'Wesentliche Veränderungen', 70, 650, palette.gold)
 
-  setFont(ctx, 15, 500)
-  ctx.fillStyle = palette.muted
-  ctx.fillText('Alt-Produkt, Neu-Produkt und monatlicher Effekt aus Mandantensicht.', 70, sectionY + 26)
+  const frame = { x: 70, y: 680, w: 1100, h: 250 }
+  roundedRect(ctx, frame.x, frame.y, frame.w, frame.h, 18, palette.paper, palette.gold)
 
-  const gap = 18
-  const cardW = (1100 - gap) / 2
-  const cardH = 101
-  const cards = changes.slice(0, 6)
-
+  const cards = changes.slice(0, 5)
+  const gap = 10
+  const cardW = (frame.w - 40 - gap * 4) / 5
+  const cardH = 176
   cards.forEach((change, index) => {
-    const x = 70 + (index % 2) * (cardW + gap)
-    const y = 720 + Math.floor(index / 2) * (cardH + gap)
-    drawProductCard(ctx, { x, y, w: cardW, h: cardH }, change)
+    const x = frame.x + 20 + index * (cardW + gap)
+    drawProductCard(ctx, { x, y: frame.y + 52, w: cardW, h: cardH }, change)
   })
+
+  setFont(ctx, 14, 700)
+  ctx.fillStyle = palette.muted
+  ctx.fillText('Alt-Produkt, Neu-Produkt und Wirkung aus Mandantensicht', frame.x + 20, frame.y + 31)
 }
 
 function drawProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: ProductChange) {
   const tone = toneForEffect(change.effectType)
-  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 14, tone.bg, tone.border)
-  drawProductIcon(ctx, rect.x + 30, rect.y + 50, change.title, tone.accent)
+  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 12, tone.bg, tone.border)
+  drawProductIcon(ctx, rect.x + rect.w / 2, rect.y + 28, change.title, tone.accent)
 
-  setFont(ctx, 17, 900)
+  setFont(ctx, 14, 900)
   ctx.fillStyle = palette.ink
-  drawSingleLine(ctx, change.title, rect.x + 62, rect.y + 28, rect.w - 250)
+  drawSingleLine(ctx, change.title, rect.x + 12, rect.y + 62, rect.w - 24, 'center')
 
-  setFont(ctx, 13, 600)
+  setFont(ctx, 11, 900)
   ctx.fillStyle = palette.muted
-  drawSingleLine(ctx, `Alt: ${change.oldProduct}`, rect.x + 62, rect.y + 53, rect.w - 82)
-  drawSingleLine(ctx, `Neu: ${change.newProduct}`, rect.x + 62, rect.y + 75, rect.w - 82)
+  ctx.fillText('ALT', rect.x + 14, rect.y + 91)
+  setFont(ctx, 13, 700)
+  ctx.fillStyle = palette.ink
+  drawSingleLine(ctx, change.oldProduct, rect.x + 56, rect.y + 91, rect.w - 70)
 
-  setFont(ctx, 17, 900)
+  setFont(ctx, 11, 900)
+  ctx.fillStyle = palette.muted
+  ctx.fillText('NEU', rect.x + 14, rect.y + 116)
+  setFont(ctx, 13, 700)
+  ctx.fillStyle = palette.ink
+  drawSingleLine(ctx, change.newProduct, rect.x + 56, rect.y + 116, rect.w - 70)
+
+  roundedRect(ctx, rect.x + 12, rect.y + 136, rect.w - 24, 28, 14, tone.badge, tone.border)
+  setFont(ctx, 13, 900)
   ctx.fillStyle = tone.accent
-  drawSingleLine(ctx, change.effectLabel, rect.x + rect.w - 205, rect.y + 30, 178, 'right')
+  drawSingleLine(ctx, change.effectLabel, rect.x + rect.w / 2, rect.y + 155, rect.w - 36, 'center')
 }
 
 function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData) {
-  const rect = { x: 70, y: 1082, w: 1100, h: 170 }
-  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 20, data.longTermSaving.status === 'present' ? palette.greenSoft : palette.amberSoft, palette.line)
-  ctx.fillStyle = data.longTermSaving.status === 'present' ? palette.green : palette.amber
-  roundPath(ctx, rect.x, rect.y, 14, rect.h, 20)
+  drawSectionTitle(ctx, '5', `Reine Beitragsersparnis bis ${data.targetAge}`, 70, 972, palette.green)
+
+  const rect = { x: 70, y: 1002, w: 1100, h: 174 }
+  const isPresent = data.longTermSaving.status === 'present'
+  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 20, isPresent ? palette.greenSoft : palette.amberSoft, isPresent ? '#b7dec9' : '#ead49a')
+
+  ctx.fillStyle = isPresent ? palette.green : palette.amber
+  roundPath(ctx, rect.x, rect.y, 122, rect.h, 20)
   ctx.fill()
+  drawSavingsIcon(ctx, rect.x + 61, rect.y + 88, palette.paper)
 
-  setFont(ctx, 24, 900)
-  ctx.fillStyle = palette.ink
-  ctx.fillText('Reine Beitragsersparnis bis 67', rect.x + 34, rect.y + 44)
-
-  setFont(ctx, 52, 900)
-  ctx.fillStyle = data.longTermSaving.status === 'present' ? palette.green : palette.amber
-  drawSingleLine(ctx, data.longTermSaving.label, rect.x + 34, rect.y + 105, 420)
-
-  setFont(ctx, 15, 800)
+  setFont(ctx, 18, 900)
   ctx.fillStyle = palette.muted
-  ctx.fillText(data.longTermSaving.note, rect.x + 36, rect.y + 135)
+  ctx.fillText('GESAMTVORTEIL', rect.x + 156, rect.y + 52)
+  setFont(ctx, 50, 900)
+  ctx.fillStyle = isPresent ? palette.green : palette.amber
+  drawSingleLine(ctx, data.longTermSaving.label, rect.x + 156, rect.y + 111, 380)
 
-  setFont(ctx, 18, 500)
+  setFont(ctx, 14, 800)
+  ctx.fillStyle = palette.muted
+  drawSingleLine(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 140, 380)
+
+  setFont(ctx, 18, 600)
   ctx.fillStyle = palette.ink
   drawWrappedText(
     ctx,
     'Diese Ersparnis bezieht sich auf die Optimierung der bisherigen Bausteine vor Einrechnung neuer zusätzlicher Bausteine.',
-    rect.x + 520,
-    rect.y + 58,
-    560,
+    rect.x + 590,
+    rect.y + 64,
+    470,
     { lineHeight: 25, maxLines: 3 },
   )
 }
 
 function drawOptionalPotential(ctx: CanvasRenderingContext2D, text: string) {
-  const rect = { x: 70, y: 1276, w: 1100, h: 120 }
-  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 16, palette.paper, palette.line)
-  setFont(ctx, 22, 900)
+  drawSectionTitle(ctx, '6', 'Optionales Zusatzpotenzial', 70, 1223, palette.gold)
+
+  const rect = { x: 70, y: 1253, w: 1100, h: 120 }
+  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, palette.goldSoft, '#e5cf95')
+  drawSmallCircleIcon(ctx, rect.x + 48, rect.y + 60, palette.gold)
+
+  setFont(ctx, 19, 700)
   ctx.fillStyle = palette.ink
-  ctx.fillText('Optionales Zusatzpotenzial', rect.x + 26, rect.y + 38)
-  setFont(ctx, 17, 500)
-  ctx.fillStyle = palette.muted
-  drawWrappedText(ctx, text, rect.x + 26, rect.y + 66, rect.w - 52, { lineHeight: 23, maxLines: 2 })
+  drawWrappedText(ctx, text, rect.x + 92, rect.y + 47, rect.w - 124, { lineHeight: 25, maxLines: 3 })
 }
 
 function drawConclusion(ctx: CanvasRenderingContext2D, data: OverviewData) {
-  const rect = { x: 70, y: 1420, w: 1100, h: 132 }
-  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 16, palette.navySoft, palette.line)
-  setFont(ctx, 22, 900)
+  drawSectionTitle(ctx, '7', 'Fazit', 70, 1422, palette.navy)
+
+  const rect = { x: 70, y: 1452, w: 1100, h: 126 }
+  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, palette.paper, palette.line)
   ctx.fillStyle = palette.navy
-  ctx.fillText('Fazit', rect.x + 26, rect.y + 38)
-  setFont(ctx, 18, 600)
+  roundPath(ctx, rect.x, rect.y, 126, rect.h, 18)
+  ctx.fill()
+  drawCheckIcon(ctx, rect.x + 63, rect.y + 64, palette.paper)
+
+  setFont(ctx, 18, 700)
   ctx.fillStyle = palette.ink
-  drawWrappedText(ctx, data.conclusion, rect.x + 26, rect.y + 68, rect.w - 52, { lineHeight: 24, maxLines: 3 })
+  drawWrappedText(ctx, data.conclusion, rect.x + 158, rect.y + 45, rect.w - 190, { lineHeight: 25, maxLines: 3 })
 }
 
 function drawNotices(ctx: CanvasRenderingContext2D, notices: string[]) {
-  const rect = { x: 70, y: 1575, w: 1100, h: 104 }
-  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 14, palette.paperSoft, palette.line)
-  setFont(ctx, 17, 900)
-  ctx.fillStyle = palette.ink
-  ctx.fillText('Modellannahmen & Hinweise', rect.x + 22, rect.y + 31)
-  setFont(ctx, 12.5, 600)
-  ctx.fillStyle = palette.muted
+  drawSectionTitle(ctx, '8', 'Modellannahmen & Hinweise', 70, 1624, palette.navy)
 
+  const startX = 70
+  const startY = 1651
+  const itemW = 270
+  setFont(ctx, 12, 700)
   notices.slice(0, 8).forEach((notice, index) => {
     const col = index % 4
     const row = Math.floor(index / 4)
-    const x = rect.x + 22 + col * 265
-    const y = rect.y + 58 + row * 26
-    ctx.fillStyle = palette.gold
-    ctx.beginPath()
-    ctx.arc(x, y - 4, 3, 0, Math.PI * 2)
-    ctx.fill()
+    const x = startX + col * itemW
+    const y = startY + row * 32
+    drawMiniNoticeIcon(ctx, x + 7, y - 4)
     ctx.fillStyle = palette.muted
-    drawSingleLine(ctx, notice, x + 12, y, 232)
+    drawSingleLine(ctx, notice, x + 22, y, 232)
   })
 }
 
 function drawFooter(ctx: CanvasRenderingContext2D) {
+  ctx.strokeStyle = palette.line
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(70, 1715)
+  ctx.lineTo(1170, 1715)
+  ctx.stroke()
+
+  setFont(ctx, 17, 900)
   ctx.fillStyle = palette.navy
-  ctx.fillRect(0, 1714, A4_WIDTH, 40)
-  setFont(ctx, 18, 800)
+  drawSingleLine(ctx, 'PraeLux', A4_WIDTH / 2, 1739, 120, 'center')
+  drawAnchor(ctx, A4_WIDTH / 2 + 50, 1730, 9, palette.gold)
+}
+
+function drawSectionTitle(
+  ctx: CanvasRenderingContext2D,
+  number: string,
+  title: string,
+  x: number,
+  y: number,
+  color: string,
+) {
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.arc(x + 15, y - 7, 15, 0, Math.PI * 2)
+  ctx.fill()
+  setFont(ctx, 15, 900)
   ctx.fillStyle = palette.paper
-  ctx.fillText('PraeLux', 70, 1739)
-  drawAnchor(ctx, 154, 1731, 11, palette.gold)
+  drawSingleLine(ctx, number, x + 15, y - 1, 24, 'center')
+
+  setFont(ctx, 24, 900)
+  ctx.fillStyle = palette.ink
+  drawSingleLine(ctx, title, x + 42, y, 650)
 }
 
 function toneForEffect(effectType: ProductEffectType) {
   if (effectType === 'saving') {
-    return { bg: palette.greenSoft, border: '#b9dec9', accent: palette.green }
+    return { bg: palette.greenSoft, border: '#b9dec9', accent: palette.green, badge: '#dff0e7' }
   }
   if (effectType === 'extra' || effectType === 'new') {
-    return { bg: palette.amberSoft, border: '#ead49a', accent: palette.amber }
+    return { bg: palette.amberSoft, border: '#ead49a', accent: palette.amber, badge: '#fff8e5' }
   }
   if (effectType === 'missing') {
-    return { bg: palette.redSoft, border: '#edc0c0', accent: palette.red }
+    return { bg: palette.redSoft, border: '#edc0c0', accent: palette.red, badge: '#fff0f0' }
   }
-  return { bg: palette.paper, border: palette.line, accent: palette.navy2 }
+  return { bg: palette.paperSoft, border: palette.line, accent: palette.teal, badge: '#eef7f7' }
+}
+
+function drawFactIcon(ctx: CanvasRenderingContext2D, x: number, y: number, index: number, status: string) {
+  const color = status === 'present' ? palette.gold : status === 'check' ? palette.amber : palette.red
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.arc(x, y, 15, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.fillStyle = color
+  setFont(ctx, 12, 900)
+  drawSingleLine(ctx, ['G', 'A', '€', '+', 'Z'][index] ?? '•', x, y + 4, 24, 'center')
 }
 
 function drawProductIcon(ctx: CanvasRenderingContext2D, x: number, y: number, title: string, color: string) {
   ctx.strokeStyle = color
-  ctx.fillStyle = 'rgba(255,255,255,0.7)'
-  ctx.lineWidth = 2.5
+  ctx.fillStyle = palette.paper
+  ctx.lineWidth = 2.4
   ctx.beginPath()
   ctx.arc(x, y, 19, 0, Math.PI * 2)
   ctx.fill()
@@ -340,9 +402,54 @@ function drawProductIcon(ctx: CanvasRenderingContext2D, x: number, y: number, ti
 
   setFont(ctx, 14, 900)
   ctx.fillStyle = color
-  ctx.textAlign = 'center'
-  ctx.fillText(iconInitial(title), x, y + 5)
-  ctx.textAlign = 'left'
+  drawSingleLine(ctx, iconInitial(title), x, y + 5, 28, 'center')
+}
+
+function drawSavingsIcon(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {
+  ctx.strokeStyle = color
+  ctx.fillStyle = 'rgba(255,255,255,0.16)'
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.roundRect(x - 30, y - 18, 60, 42, 18)
+  ctx.fill()
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.arc(x + 32, y - 2, 8, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(x - 10, y - 22)
+  ctx.lineTo(x + 12, y - 22)
+  ctx.stroke()
+}
+
+function drawSmallCircleIcon(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.arc(x, y, 24, 0, Math.PI * 2)
+  ctx.fill()
+  setFont(ctx, 24, 900)
+  ctx.fillStyle = palette.paper
+  drawSingleLine(ctx, '+', x, y + 8, 30, 'center')
+}
+
+function drawCheckIcon(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {
+  ctx.strokeStyle = color
+  ctx.lineWidth = 7
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.beginPath()
+  ctx.moveTo(x - 28, y - 2)
+  ctx.lineTo(x - 8, y + 20)
+  ctx.lineTo(x + 32, y - 26)
+  ctx.stroke()
+  ctx.lineCap = 'butt'
+}
+
+function drawMiniNoticeIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.fillStyle = palette.gold
+  ctx.beginPath()
+  ctx.arc(x, y, 5, 0, Math.PI * 2)
+  ctx.fill()
 }
 
 function iconInitial(title: string) {
@@ -351,22 +458,6 @@ function iconInitial(title: string) {
   if (title === 'Rechtsschutz') return '§'
   if (title === 'Altersvorsorge') return 'A'
   return title.slice(0, 1).toUpperCase()
-}
-
-function gradientRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  from: string,
-  to: string,
-) {
-  const gradient = ctx.createLinearGradient(x, y, x + w, y + h)
-  gradient.addColorStop(0, from)
-  gradient.addColorStop(1, to)
-  ctx.fillStyle = gradient
-  ctx.fillRect(x, y, w, h)
 }
 
 function roundedRect(
@@ -450,14 +541,17 @@ function drawWrappedText(
   y: number,
   maxWidth: number,
   options: TextOptions = {},
+  align: CanvasTextAlign = 'left',
 ) {
   const lineHeight = options.lineHeight ?? 20
   const maxLines = options.maxLines ?? 4
   const words = text.split(/\s+/).filter(Boolean)
   const lines: string[] = []
   let current = ''
+  let truncated = false
 
-  for (const word of words) {
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index]
     const candidate = current ? `${current} ${word}` : word
     if (ctx.measureText(candidate).width <= maxWidth) {
       current = candidate
@@ -465,16 +559,23 @@ function drawWrappedText(
     }
     if (current) lines.push(current)
     current = word
-    if (lines.length === maxLines) break
+    if (lines.length === maxLines) {
+      truncated = true
+      break
+    }
   }
 
   if (current && lines.length < maxLines) lines.push(current)
-  if (lines.length === maxLines && words.length > 0) {
+  if (truncated && lines.length === maxLines) {
     const last = lines[lines.length - 1]
     if (ctx.measureText(`${last} …`).width <= maxWidth) lines[lines.length - 1] = `${last} …`
   }
 
+  const previousAlign = ctx.textAlign
+  ctx.textAlign = align
   lines.forEach((line, index) => {
-    ctx.fillText(line, x, y + index * lineHeight)
+    const drawX = align === 'center' ? x + maxWidth / 2 : x
+    ctx.fillText(line, drawX, y + index * lineHeight)
   })
+  ctx.textAlign = previousAlign
 }

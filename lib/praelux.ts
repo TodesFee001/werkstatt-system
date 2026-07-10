@@ -25,6 +25,15 @@ export type ProductChange = {
   effectType: ProductEffectType
 }
 
+export type EditableProductChange = {
+  id: string
+  title: string
+  oldProduct: string
+  newProduct: string
+  monthlyEffect: string
+  effectType: ProductEffectType
+}
+
 export type Mandantenwirkung = {
   monthly?: number
   yearly?: number
@@ -48,6 +57,7 @@ export type QualityCheck = {
 
 export type OverviewData = {
   clientName: string
+  targetAge: number
   subtitle: string
   intro: string
   facts: FactField[]
@@ -62,99 +72,225 @@ export type OverviewData = {
   qualityChecks: QualityCheck[]
 }
 
+export type PraeLuxFormData = {
+  clientName: string
+  birthDate: string
+  netIncome: string
+  surplus: string
+  horizon: string
+  targetAge: string
+  reserves: string
+  liabilities: string
+  existingMonthly: string
+  existingYearly: string
+  recommendedMonthly: string
+  recommendedYearly: string
+  productChanges: EditableProductChange[]
+  optimizedMonthlySaving: string
+  pureSavingUntilTarget: string
+  optionalMonthlyInvestment: string
+  optionalPotentialUntilTarget: string
+  conclusionNote: string
+}
+
+export type PraeLuxCalculatedValues = {
+  age?: number
+  targetAge: number
+  remainingYears?: number
+  birthDateLabel: string
+  existingMonthly?: number
+  existingYearly?: number
+  recommendedMonthly?: number
+  recommendedYearly?: number
+  directMonthly?: number
+  directYearly?: number
+  optimizedMonthlySaving?: number
+  pureSavingUntilTarget?: number
+  optionalMonthlyInvestment?: number
+  optionalPotentialUntilTarget?: number
+}
+
 const MISSING = 'fehlt'
 const CHECK = 'muss geprüft werden'
 const NOT_GIVEN = 'nicht angegeben'
+const DEFAULT_TARGET_AGE = 67
 
-type SearchLine = {
-  original: string
-  search: string
+const DEFAULT_PRODUCT_CHANGES: EditableProductChange[] = [
+  {
+    id: 'haftpflicht',
+    title: 'Haftpflicht',
+    oldProduct: '',
+    newProduct: '',
+    monthlyEffect: '',
+    effectType: 'missing',
+  },
+  {
+    id: 'krankenkasse',
+    title: 'Krankenkasse',
+    oldProduct: '',
+    newProduct: '',
+    monthlyEffect: '',
+    effectType: 'missing',
+  },
+  {
+    id: 'zahnzusatz',
+    title: 'Zahnzusatz',
+    oldProduct: '',
+    newProduct: '',
+    monthlyEffect: '',
+    effectType: 'missing',
+  },
+  {
+    id: 'rechtsschutz',
+    title: 'Rechtsschutz',
+    oldProduct: '',
+    newProduct: '',
+    monthlyEffect: '',
+    effectType: 'missing',
+  },
+  {
+    id: 'altersvorsorge',
+    title: 'Altersvorsorge',
+    oldProduct: '',
+    newProduct: '',
+    monthlyEffect: '',
+    effectType: 'missing',
+  },
+]
+
+export function createEmptyPraeLuxForm(): PraeLuxFormData {
+  return {
+    clientName: '',
+    birthDate: '',
+    netIncome: '',
+    surplus: '',
+    horizon: '',
+    targetAge: String(DEFAULT_TARGET_AGE),
+    reserves: '',
+    liabilities: '',
+    existingMonthly: '',
+    existingYearly: '',
+    recommendedMonthly: '',
+    recommendedYearly: '',
+    productChanges: DEFAULT_PRODUCT_CHANGES.map((change) => ({ ...change })),
+    optimizedMonthlySaving: '',
+    pureSavingUntilTarget: '',
+    optionalMonthlyInvestment: '',
+    optionalPotentialUntilTarget: '',
+    conclusionNote: '',
+  }
 }
 
-const FACT_DEFINITIONS = [
-  {
-    key: 'birthDate',
-    label: 'Geburtsdatum',
-    patterns: [
-      /geburtsdatum\s*[:\-]\s*([0-3]?\d[./-][01]?\d[./-](?:19|20)?\d{2})/i,
-      /geboren(?:\s+am)?\s*[:\-]?\s*([0-3]?\d[./-][01]?\d[./-](?:19|20)?\d{2})/i,
-    ],
-  },
-  {
-    key: 'age',
-    label: 'Alter',
-    patterns: [/(?:^|\n)\s*alter\s*[:\-]\s*(\d{1,2})(?:\s*jahre?)?/i],
-  },
-  {
-    key: 'netIncome',
-    label: 'Nettoeinkommen',
-    patterns: [
-      /nettoeinkommen\s*[:\-]\s*([^\n\r]+)/i,
-      /netto[-\s]?einkommen\s*[:\-]\s*([^\n\r]+)/i,
-    ],
-  },
-  {
-    key: 'surplus',
-    label: 'Überschuss',
-    patterns: [
-      /monatlicher\s+überschuss\s*[:\-]\s*([^\n\r]+)/i,
-      /überschuss\s*[:\-]\s*([^\n\r]+)/i,
-      /frei(?:er|e|)\s+betrag\s*[:\-]\s*([^\n\r]+)/i,
-    ],
-  },
-  {
-    key: 'horizon',
-    label: 'Anlagehorizont',
-    patterns: [/anlagehorizont\s*[:\-]\s*([^\n\r]+)/i, /horizont\s*[:\-]\s*([^\n\r]+)/i],
-  },
-  {
-    key: 'targetAge',
-    label: 'Zielalter',
-    patterns: [
-      /zielalter\s*[:\-]\s*([^\n\r]+)/i,
-      /verfügungszeitpunkt\s*[:\-]\s*([^\n\r]+)/i,
-      /verfuegungszeitpunkt\s*[:\-]\s*([^\n\r]+)/i,
-    ],
-  },
-  {
-    key: 'reserves',
-    label: 'Rücklagen',
-    patterns: [/rücklagen\s*[:\-]\s*([^\n\r]+)/i, /ruecklagen\s*[:\-]\s*([^\n\r]+)/i],
-  },
-  {
-    key: 'liabilities',
-    label: 'Verbindlichkeiten',
-    patterns: [/verbindlichkeiten\s*[:\-]\s*([^\n\r]+)/i, /schulden\s*[:\-]\s*([^\n\r]+)/i],
-  },
-] as const
+export function calculatePraeLuxForm(form: PraeLuxFormData): PraeLuxCalculatedValues {
+  const age = calculateAgeFromIsoDate(form.birthDate)
+  const targetAge = parseInteger(form.targetAge) ?? DEFAULT_TARGET_AGE
+  const remainingYears = age !== undefined ? Math.max(0, targetAge - age) : undefined
 
-export function parsePraeLuxInput(rawText: string): OverviewData {
-  const text = rawText.trim()
-  const lines = toSearchLines(text)
-  const factsByKey = extractFacts(text)
-  const clientName = extractClientName(text) || NOT_GIVEN
-  const existing = buildConceptTotals(text, lines, 'existing')
-  const recommended = buildConceptTotals(text, lines, 'recommended')
-  const impact = buildImpact(existing, recommended, lines)
-  const changes = extractProductChanges(lines)
-  const longTermSaving = buildLongTermSaving(text, lines, factsByKey.age, changes, impact)
-  const optionalPotential = buildOptionalPotential(impact)
-  const conclusion = buildConclusion(impact, longTermSaving)
+  const existing = calculateConcept(form.existingMonthly, form.existingYearly)
+  const recommended = calculateConcept(form.recommendedMonthly, form.recommendedYearly)
+  const directMonthly =
+    existing.monthly !== undefined && recommended.monthly !== undefined
+      ? existing.monthly - recommended.monthly
+      : undefined
+  const directYearly =
+    existing.yearly !== undefined && recommended.yearly !== undefined
+      ? existing.yearly - recommended.yearly
+      : directMonthly !== undefined
+        ? directMonthly * 12
+        : undefined
 
-  const facts = FACT_DEFINITIONS.map((definition) => {
-    const value = factsByKey[definition.key] || MISSING
-    return {
-      label: definition.label,
-      value,
-      status: value === MISSING ? 'missing' : 'present',
-    } satisfies FactField
-  })
+  const optimizedMonthlySaving = parseMoneyInput(form.optimizedMonthlySaving)
+  const explicitPureSaving = parseMoneyInput(form.pureSavingUntilTarget)
+  const pureSavingUntilTarget =
+    explicitPureSaving ??
+    (optimizedMonthlySaving !== undefined && remainingYears !== undefined
+      ? optimizedMonthlySaving * 12 * remainingYears
+      : undefined)
+
+  const optionalMonthlyInvestment = parseMoneyInput(form.optionalMonthlyInvestment)
+  const explicitOptionalPotential = parseMoneyInput(form.optionalPotentialUntilTarget)
+  const optionalPotentialUntilTarget =
+    explicitOptionalPotential ??
+    (optionalMonthlyInvestment !== undefined && remainingYears !== undefined
+      ? optionalMonthlyInvestment * 12 * remainingYears
+      : undefined)
+
+  return {
+    age,
+    targetAge,
+    remainingYears,
+    birthDateLabel: formatIsoDate(form.birthDate) ?? MISSING,
+    existingMonthly: existing.monthly,
+    existingYearly: existing.yearly,
+    recommendedMonthly: recommended.monthly,
+    recommendedYearly: recommended.yearly,
+    directMonthly,
+    directYearly,
+    optimizedMonthlySaving,
+    pureSavingUntilTarget,
+    optionalMonthlyInvestment,
+    optionalPotentialUntilTarget,
+  }
+}
+
+export function buildOverviewFromForm(form: PraeLuxFormData): OverviewData {
+  const calculated = calculatePraeLuxForm(form)
+  const clientName = cleanText(form.clientName) || NOT_GIVEN
+  const existing = buildConceptTotals(
+    calculated.existingMonthly,
+    calculated.existingYearly,
+    form.existingMonthly,
+    form.existingYearly,
+    'existing',
+  )
+  const recommended = buildConceptTotals(
+    calculated.recommendedMonthly,
+    calculated.recommendedYearly,
+    form.recommendedMonthly,
+    form.recommendedYearly,
+    'recommended',
+  )
+  const impact = buildImpact(calculated.directMonthly, calculated.directYearly)
+  const changes = buildProductChanges(form.productChanges)
+  const longTermSaving = buildLongTermSaving(form, calculated)
+  const optionalPotential = buildOptionalPotential(form, calculated)
+  const conclusion = buildConclusion(form, impact, longTermSaving, calculated)
+  const horizonValue = cleanText(form.horizon) || buildHorizonLabel(calculated)
+
+  const facts: FactField[] = [
+    {
+      label: 'Geburtsdatum',
+      value: calculated.birthDateLabel,
+      status: form.birthDate ? (calculated.age === undefined ? 'check' : 'present') : 'missing',
+    },
+    {
+      label: 'Alter',
+      value: calculated.age !== undefined ? `${calculated.age} Jahre` : MISSING,
+      status: calculated.age !== undefined ? 'present' : 'missing',
+    },
+    {
+      label: 'Nettoeinkommen',
+      value: moneyFactLabel(form.netIncome, 'mtl.'),
+      status: parseMoneyInput(form.netIncome) !== undefined || cleanText(form.netIncome) ? 'present' : 'missing',
+    },
+    {
+      label: 'Überschuss',
+      value: moneyFactLabel(form.surplus, 'mtl.'),
+      status: parseMoneyInput(form.surplus) !== undefined || cleanText(form.surplus) ? 'present' : 'missing',
+    },
+    {
+      label: 'Anlagehorizont',
+      value: horizonValue,
+      status: horizonValue === MISSING ? 'missing' : cleanText(form.horizon) ? 'present' : 'check',
+    },
+  ]
 
   return {
     clientName,
+    targetAge: calculated.targetAge,
     subtitle: `${clientName} | Bestandsaufnahme vs. empfohlenes Konzept`,
     intro:
-      'Diese Übersicht zeigt, was sich durch das empfohlene Konzept monatlich, jährlich und langfristig bis zum 67. Lebensjahr verändert.',
+      'Diese Übersicht zeigt sachlich, was sich durch das empfohlene Konzept monatlich, jährlich und langfristig verändert.',
     facts,
     existing,
     recommended,
@@ -164,22 +300,26 @@ export function parsePraeLuxInput(rawText: string): OverviewData {
     optionalPotential,
     conclusion,
     notices: [
-      'Laufzeit modellhaft bis 67',
+      `Laufzeit modellhaft bis ${calculated.targetAge}`,
       'Beitragsersparnis ohne Zinseszins gerechnet',
-      'Optionale Investition nur als Zusatzpotenzial',
-      'Vereinfachte Modellrechnung',
-      'Angaben ohne Gewähr',
-      'Ersetzt keine individuelle Vertragsprüfung',
-      'Darstellung erfolgt aus Mandantensicht',
-      'Ersparnisse werden als positiver Vorteil dargestellt',
+      'Optionale Anlage ohne Renditeannahme',
+      'Neue Bausteine nicht in reiner Beitragsersparnis enthalten',
+      'Fehlende Werte bleiben markiert',
+      'Keine Garantie oder Renditezusage',
+      'Darstellung aus Mandantensicht',
+      'Ersparnisse werden als positiver Vorteil gezeigt',
     ],
     qualityChecks: [
-      { label: 'Mandantendaten', ok: clientName !== NOT_GIVEN },
-      { label: 'Bestand', ok: Boolean(existing.monthly || existing.yearly) },
-      { label: 'Empfehlung', ok: Boolean(recommended.monthly || recommended.yearly) },
-      { label: 'Mandantenwirkung', ok: impact.type !== 'missing' },
-      { label: 'Produktveränderungen', ok: changes.some((change) => change.effectType !== 'missing') },
-      { label: 'Langfristwert', ok: longTermSaving.status === 'present' },
+      { label: 'Mandantendaten', ok: clientName !== NOT_GIVEN && calculated.age !== undefined },
+      {
+        label: 'Einkommen & Überschuss',
+        ok: hasValue(form.netIncome) && hasValue(form.surplus),
+      },
+      { label: 'Bestand', ok: existing.monthly !== undefined || existing.yearly !== undefined },
+      { label: 'Empfehlung', ok: recommended.monthly !== undefined || recommended.yearly !== undefined },
+      { label: 'Direkte Veränderung', ok: impact.type !== 'missing' },
+      { label: 'Produkte', ok: changes.some((change) => change.effectType !== 'missing') },
+      { label: 'Ersparnis bis Zielalter', ok: longTermSaving.status === 'present' },
     ],
   }
 }
@@ -195,6 +335,24 @@ export function formatCurrency(value: number, options: { plus?: boolean; yearly?
   }).format(absolute)}${suffix}`
 }
 
+export function formatOptionalCurrency(value: number | undefined, options: { plus?: boolean; yearly?: boolean } = {}) {
+  return value === undefined ? MISSING : formatCurrency(value, options)
+}
+
+export function parseMoneyInput(value: string | undefined) {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const isNegative = /[-−]/.test(trimmed)
+  const cleaned = trimmed
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+    .replace(',', '.')
+  const number = Number.parseFloat(cleaned)
+  if (!Number.isFinite(number)) return undefined
+  return isNegative ? -Math.abs(number) : Math.abs(number)
+}
+
 export function slugifyName(value: string) {
   return value
     .toLowerCase()
@@ -205,99 +363,63 @@ export function slugifyName(value: string) {
     .slice(0, 60)
 }
 
-function extractClientName(text: string) {
-  const patterns = [
-    /(?:mandant(?:in)?|mandantenname|kunde(?:nname)?|name)\s*[:\-]\s*([^\n\r]+)/i,
-    /für\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß]+(?:\s+[A-ZÄÖÜ][A-Za-zÄÖÜäöüß]+){1,3})/i,
-  ]
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
-    const value = cleanValue(match?.[1])
-    if (value && !isGenericLabel(value)) return value
+function calculateConcept(monthlyInput: string, yearlyInput: string) {
+  const monthlyFromInput = parseMoneyInput(monthlyInput)
+  const yearlyFromInput = parseMoneyInput(yearlyInput)
+  return {
+    monthly: monthlyFromInput ?? (yearlyFromInput !== undefined ? yearlyFromInput / 12 : undefined),
+    yearly: yearlyFromInput ?? (monthlyFromInput !== undefined ? monthlyFromInput * 12 : undefined),
   }
-
-  return undefined
 }
 
-function extractFacts(text: string) {
-  const facts: Record<string, string> = {}
-
-  for (const definition of FACT_DEFINITIONS) {
-    for (const pattern of definition.patterns) {
-      const match = text.match(pattern)
-      const value = cleanValue(match?.[1])
-      if (value) {
-        facts[definition.key] = value
-        break
-      }
-    }
-  }
-
-  if (!facts.age && facts.birthDate) {
-    const age = calculateAge(facts.birthDate)
-    if (age) facts.age = String(age)
-  }
-
-  return facts
-}
-
-function buildConceptTotals(text: string, lines: SearchLine[], type: 'existing' | 'recommended'): ConceptTotals {
-  const monthly = findConceptMoney(lines, type, 'monthly') ?? findConceptMoneyInText(text, type, 'monthly')
-  const yearly =
-    findConceptMoney(lines, type, 'yearly') ??
-    findConceptMoneyInText(text, type, 'yearly') ??
-    (monthly ? monthly * 12 : undefined)
-  const derivedMonthly = monthly ?? (yearly ? yearly / 12 : undefined)
-
-  const note =
+function buildConceptTotals(
+  monthly: number | undefined,
+  yearly: number | undefined,
+  monthlyInput: string,
+  yearlyInput: string,
+  type: 'existing' | 'recommended',
+): ConceptTotals {
+  const baseNote =
     type === 'existing'
-      ? 'Der aktuelle Bestand wird sachlich als Ausgangspunkt eingeordnet.'
-      : 'Das empfohlene Konzept wird als neue Struktur gegenübergestellt.'
+      ? 'Der aktuelle Bestand ist die Ausgangslage.'
+      : 'Das empfohlene Konzept ist die neue Struktur.'
+  const note = buildDerivedNote(monthlyInput, yearlyInput, baseNote)
 
   return {
-    monthly: derivedMonthly,
+    monthly,
     yearly,
-    monthlyLabel: derivedMonthly ? `${formatCurrency(derivedMonthly)} mtl.` : MISSING,
-    yearlyLabel: yearly ? formatCurrency(yearly, { yearly: true }) : MISSING,
+    monthlyLabel: monthly !== undefined ? `${formatCurrency(monthly)} mtl.` : MISSING,
+    yearlyLabel: yearly !== undefined ? formatCurrency(yearly, { yearly: true }) : MISSING,
     note,
   }
 }
 
-function buildImpact(existing: ConceptTotals, recommended: ConceptTotals, lines: SearchLine[]): Mandantenwirkung {
-  const directMonthly = findImpactMoney(lines, 'monthly')
-  const directYearly = findImpactMoney(lines, 'yearly')
+function buildDerivedNote(monthlyInput: string, yearlyInput: string, baseNote: string) {
+  const hasMonthly = parseMoneyInput(monthlyInput) !== undefined
+  const hasYearly = parseMoneyInput(yearlyInput) !== undefined
+  if (hasMonthly && !hasYearly) return `${baseNote} Jahreswert automatisch aus Monatswert berechnet.`
+  if (!hasMonthly && hasYearly) return `${baseNote} Monatswert automatisch aus Jahreswert berechnet.`
+  if (hasMonthly && hasYearly) return `${baseNote} Monats- und Jahreswert wurden einzeln erfasst.`
+  return `${baseNote} Beitrag fehlt noch.`
+}
 
-  const monthly =
-    directMonthly ??
-    (existing.monthly !== undefined && recommended.monthly !== undefined
-      ? existing.monthly - recommended.monthly
-      : undefined)
-  const yearly =
-    directYearly ??
-    (existing.yearly !== undefined && recommended.yearly !== undefined
-      ? existing.yearly - recommended.yearly
-      : monthly !== undefined
-        ? monthly * 12
-        : undefined)
-
+function buildImpact(monthly: number | undefined, yearly: number | undefined): Mandantenwirkung {
   if (monthly === undefined && yearly === undefined) {
     return {
       monthlyLabel: MISSING,
       yearlyLabel: MISSING,
       type: 'missing',
-      explanation: 'Die Veränderung kann mit den vorliegenden Angaben noch nicht beziffert werden.',
+      explanation: 'Die Veränderung wird automatisch berechnet, sobald Bestand und Empfehlung erfasst sind.',
     }
   }
 
   const reference = monthly ?? (yearly ? yearly / 12 : 0)
   const isSaving = reference >= 0
-  const type = isSaving ? 'saving' : 'extra'
 
   return {
     monthly,
     yearly,
-    type,
+    type: isSaving ? 'saving' : 'extra',
     monthlyLabel:
       monthly === undefined
         ? MISSING
@@ -311,132 +433,28 @@ function buildImpact(existing: ConceptTotals, recommended: ConceptTotals, lines:
           ? formatCurrency(yearly, { plus: true, yearly: true })
           : `Mehrbeitrag: ${formatCurrency(Math.abs(yearly), { yearly: true })}`,
     explanation: isSaving
-      ? 'Entlastung durch Optimierung und Entfall einzelner Bausteine.'
-      : 'Die Empfehlung führt zu einem Mehrbeitrag, der mit zusätzlichen oder veränderten Bausteinen geprüft werden sollte.',
+      ? 'Entlastung aus der Differenz zwischen Bestandsaufnahme und empfohlenem Konzept.'
+      : 'Das empfohlene Konzept verursacht einen Mehrbeitrag; die fachliche Begründung sollte klar benannt werden.',
   }
 }
 
-function buildLongTermSaving(
-  text: string,
-  lines: SearchLine[],
-  ageValue: string | undefined,
-  changes: ProductChange[],
-  impact: Mandantenwirkung,
-): LongTermSaving {
-  const explicit = findLongTermSaving(text)
-  if (explicit !== undefined) {
+function buildProductChanges(productChanges: EditableProductChange[]) {
+  return productChanges.map((change, index) => {
+    const effect = parseMoneyInput(change.monthlyEffect)
+    const effectType = hasProductContent(change) ? change.effectType : 'missing'
     return {
-      value: explicit,
-      label: formatCurrency(explicit, { plus: explicit >= 0 }),
-      status: 'present',
-      note: 'ohne Zinseszins gerechnet',
-    }
-  }
-
-  const optimizedMonthly = findOptimizedMonthlySaving(lines)
-  const age = ageValue ? Number.parseInt(ageValue, 10) : undefined
-  if (optimizedMonthly !== undefined && age && age < 67) {
-    const value = optimizedMonthly * 12 * (67 - age)
-    return {
-      value,
-      label: formatCurrency(value, { plus: value >= 0 }),
-      status: 'present',
-      note: 'ohne Zinseszins gerechnet',
-    }
-  }
-
-  const hasNewComponent = changes.some((change) => change.effectType === 'new' || change.effectType === 'extra')
-  if (impact.type === 'saving' && impact.monthly && age && age < 67 && !hasNewComponent) {
-    const value = impact.monthly * 12 * (67 - age)
-    return {
-      value,
-      label: formatCurrency(value, { plus: true }),
-      status: 'check',
-      note: 'aus direkter Entlastung berechnet; neue Bausteine müssen geprüft werden',
-    }
-  }
-
-  return {
-    label: CHECK,
-    status: 'check',
-    note:
-      'Für die reine Beitragsersparnis fehlen die optimierten Bestandsbausteine oder das Alter bis 67.',
-  }
-}
-
-function buildOptionalPotential(impact: Mandantenwirkung) {
-  if (impact.type !== 'saving' || !impact.monthly || impact.monthly <= 0) {
-    return 'Kein optionales Zusatzpotenzial dargestellt, solange keine klare monatliche Entlastung ausgewiesen ist.'
-  }
-
-  return `Die monatliche Entlastung von ${formatCurrency(
-    impact.monthly,
-    { plus: true },
-  )} könnte optional zusätzlich für Vermögensaufbau genutzt werden. Diese Betrachtung ist rein modellhaft und nicht garantiert.`
-}
-
-function buildConclusion(impact: Mandantenwirkung, longTermSaving: LongTermSaving) {
-  if (impact.type === 'saving') {
-    const longTermPart =
-      longTermSaving.status === 'present'
-        ? ` Besonders stark wirkt die laufende Entlastung über die Laufzeit bis zum 67. Lebensjahr.`
-        : ' Die langfristige Wirkung sollte nach Prüfung der Bestandsbausteine ergänzt werden.'
-
-    return `Das neue Konzept verbessert die laufende Beitragsstruktur und schafft finanziellen Spielraum. Die bestehende Absicherung wird nicht schlechtgeredet, sondern gezielt optimiert.${longTermPart}`
-  }
-
-  if (impact.type === 'extra') {
-    return 'Das neue Konzept verursacht einen Mehrbeitrag. Entscheidend ist deshalb die fachliche Prüfung, welche zusätzlichen oder verbesserten Bausteine diesen Mehraufwand begründen.'
-  }
-
-  return 'Die vorliegenden Angaben reichen noch nicht aus, um die finanzielle Wirkung vollständig zu bewerten. Fehlende Werte sind markiert und sollten vor der Mandantenfreigabe ergänzt werden.'
-}
-
-function extractProductChanges(lines: SearchLine[]) {
-  const changes: ProductChange[] = []
-
-  for (const line of lines) {
-    if (changes.length >= 6) break
-    const hasChangeSignal =
-      line.original.includes('→') ||
-      line.original.includes('->') ||
-      line.search.includes(' alt ') ||
-      line.search.includes(' neu ') ||
-      line.search.includes('bestand') ||
-      line.search.includes('empfehl')
-    const hasProductSignal = PRODUCT_KEYWORDS.some((keyword) => line.search.includes(keyword.search))
-    const money = extractFirstMoney(line.original)
-
-    if (!hasChangeSignal || !hasProductSignal) continue
-
-    const title = detectProductTitle(line.search)
-    const [oldProduct, newProduct] = splitOldNew(line.original)
-    const effectType = detectEffectType(line.search, money, oldProduct, newProduct)
-
-    changes.push({
-      title,
-      oldProduct: oldProduct || NOT_GIVEN,
-      newProduct: newProduct || CHECK,
-      effect: money,
-      effectLabel: buildEffectLabel(money, effectType),
+      title: cleanText(change.title) || `Baustein ${index + 1}`,
+      oldProduct: cleanText(change.oldProduct) || NOT_GIVEN,
+      newProduct: cleanText(change.newProduct) || CHECK,
+      effect,
+      effectLabel: buildEffectLabel(effect, effectType),
       effectType,
-    })
-  }
-
-  if (changes.length === 0) {
-    changes.push({
-      title: 'Produktveränderungen',
-      oldProduct: NOT_GIVEN,
-      newProduct: CHECK,
-      effectLabel: CHECK,
-      effectType: 'missing',
-    })
-  }
-
-  return changes
+    } satisfies ProductChange
+  })
 }
 
 function buildEffectLabel(value: number | undefined, type: ProductEffectType) {
+  if (type === 'missing') return CHECK
   if (value === undefined) return CHECK
   if (type === 'saving') return `${formatCurrency(value, { plus: true })} mtl.`
   if (type === 'new') return `neuer Baustein: ${formatCurrency(value)} mtl.`
@@ -444,206 +462,130 @@ function buildEffectLabel(value: number | undefined, type: ProductEffectType) {
   return `${formatCurrency(value)} mtl.`
 }
 
-function detectEffectType(
-  searchLine: string,
-  money: number | undefined,
-  oldProduct: string,
-  newProduct: string,
-): ProductEffectType {
-  if (searchLine.includes('erspar') || searchLine.includes('entlast') || searchLine.includes('gunstiger')) {
-    return 'saving'
-  }
-  if (searchLine.includes('mehrbeitrag') || searchLine.includes('teurer') || searchLine.includes('mehrbelast')) {
-    return 'extra'
-  }
-  if (searchLine.includes('neuer baustein') || searchLine.includes('zusatzlich') || oldProduct === '') {
-    return 'new'
-  }
-  if (money !== undefined && /[+]\s*\d/.test(newProduct + searchLine)) return 'saving'
-  if (money !== undefined && /[-−]\s*\d/.test(newProduct + searchLine)) return 'extra'
-  return money === undefined ? 'missing' : 'neutral'
-}
-
-function splitOldNew(line: string) {
-  const arrow = line.includes('→') ? '→' : line.includes('->') ? '->' : undefined
-  if (arrow) {
-    const [left, right] = line.split(arrow)
-    return [stripProductLabel(left), stripProductLabel(right)] as const
-  }
-
-  const altNeu = line.match(/alt\s*[:\-]\s*(.*?)\s+neu\s*[:\-]\s*(.*)/i)
-  if (altNeu) return [stripProductLabel(altNeu[1]), stripProductLabel(altNeu[2])] as const
-
-  const bestandNeu = line.match(/bestand\s*[:\-]\s*(.*?)\s+(?:empfehlung|neu)\s*[:\-]\s*(.*)/i)
-  if (bestandNeu) return [stripProductLabel(bestandNeu[1]), stripProductLabel(bestandNeu[2])] as const
-
-  return [stripProductLabel(line), ''] as const
-}
-
-function stripProductLabel(value: string) {
-  return cleanValue(
-    value
-      .replace(/^\s*[•*\-]\s*/, '')
-      .replace(/\b(?:haftpflicht|krankenkasse|zahnzusatz|rechtsschutz|altersvorsorge|produkt|baustein)\b\s*[:\-]?/i, '')
-      .replace(/\b(?:ersparnis|entlastung|mehrbeitrag|neuer baustein)\b.*$/i, ''),
-  ) || ''
-}
-
-function findConceptMoney(lines: SearchLine[], type: 'existing' | 'recommended', period: 'monthly' | 'yearly') {
-  const conceptNeedles =
-    type === 'existing'
-      ? ['bestand', 'bisher', 'aktuell', 'vorvertrag']
-      : ['empfohlen', 'empfehlung', 'neues konzept', 'neu', 'zielkonzept']
-  const periodNeedles = period === 'monthly' ? ['mtl', 'monat'] : ['jahr', 'p.a', 'pa', 'jährlich', 'jaehrlich']
-
-  for (const line of lines) {
-    const hasConcept = conceptNeedles.some((needle) => line.search.includes(needle))
-    const hasPeriod = periodNeedles.some((needle) => line.search.includes(needle))
-    const mentionsContribution = ['beitrag', 'gesamtbeitrag', 'kosten', 'summe'].some((needle) =>
-      line.search.includes(needle),
-    )
-    if (hasConcept && hasPeriod && mentionsContribution) {
-      const value = extractFirstMoney(line.original)
-      if (value !== undefined) return value
+function buildLongTermSaving(form: PraeLuxFormData, calculated: PraeLuxCalculatedValues): LongTermSaving {
+  const explicit = parseMoneyInput(form.pureSavingUntilTarget)
+  if (explicit !== undefined) {
+    return {
+      value: explicit,
+      label: formatCurrency(explicit, { plus: explicit >= 0 }),
+      status: 'present',
+      note: `manuell erfasst bis ${calculated.targetAge}`,
     }
   }
 
-  return undefined
-}
-
-function findConceptMoneyInText(text: string, type: 'existing' | 'recommended', period: 'monthly' | 'yearly') {
-  const concept = type === 'existing' ? '(?:bestand|bisher|aktuell)' : '(?:empfohlenes konzept|empfehlung|neues konzept)'
-  const periodPattern = period === 'monthly' ? '(?:monatlich|monat|mtl\\.)' : '(?:jährlich|jaehrlich|jahr|p\\.a\\.)'
-  const regex = new RegExp(`${concept}[\\s\\S]{0,100}${periodPattern}[\\s\\S]{0,60}(${MONEY_PATTERN.source})`, 'i')
-  const match = text.match(regex)
-  return parseMoney(match?.[1])
-}
-
-function findImpactMoney(lines: SearchLine[], period: 'monthly' | 'yearly') {
-  const periodNeedles = period === 'monthly' ? ['mtl', 'monat'] : ['jahr', 'p.a', 'pa', 'jährlich', 'jaehrlich']
-  for (const line of lines) {
-    const hasImpact = ['mandantenwirkung', 'direkte veranderung', 'entlastung', 'ersparnis', 'mehrbeitrag'].some(
-      (needle) => line.search.includes(needle),
-    )
-    const hasPeriod = periodNeedles.some((needle) => line.search.includes(needle))
-    if (hasImpact && hasPeriod) {
-      const value = extractFirstMoney(line.original)
-      if (value !== undefined) {
-        return line.search.includes('mehrbeitrag') || line.search.includes('mehrbelast') ? -Math.abs(value) : value
-      }
+  if (calculated.pureSavingUntilTarget !== undefined && calculated.optimizedMonthlySaving !== undefined) {
+    return {
+      value: calculated.pureSavingUntilTarget,
+      label: formatCurrency(calculated.pureSavingUntilTarget, { plus: calculated.pureSavingUntilTarget >= 0 }),
+      status: 'present',
+      note: `${formatCurrency(calculated.optimizedMonthlySaving)} mtl. × 12 × ${
+        calculated.remainingYears ?? 0
+      } Jahre`,
     }
   }
-  return undefined
-}
 
-function findLongTermSaving(text: string) {
-  const patterns = [
-    /reine\s+beitragsersparnis\s+bis\s+67[\s\S]{0,80}([+\-−]?\s*\d[\d.\s]*,\d{2}\s*€?)/i,
-    /beitragsersparnis\s+bis\s+67[\s\S]{0,80}([+\-−]?\s*\d[\d.\s]*,\d{2}\s*€?)/i,
-  ]
-  for (const pattern of patterns) {
-    const value = parseMoney(text.match(pattern)?.[1])
-    if (value !== undefined) return value
+  return {
+    label: CHECK,
+    status: 'check',
+    note: 'Bitte optimierte Bestandsersparnis und Geburtsdatum erfassen.',
   }
-  return undefined
 }
 
-function findOptimizedMonthlySaving(lines: SearchLine[]) {
-  for (const line of lines) {
-    const isOptimized =
-      line.search.includes('optimiert') ||
-      line.search.includes('bisherige bausteine') ||
-      line.search.includes('bestandsbausteine') ||
-      line.search.includes('ausgewiesene beitragsersparnis')
-    const isMonthly = line.search.includes('monat') || line.search.includes('mtl')
-    const isSaving = line.search.includes('erspar') || line.search.includes('entlast')
-    if (isOptimized && isMonthly && isSaving) {
-      const value = extractFirstMoney(line.original)
-      if (value !== undefined) return value
-    }
+function buildOptionalPotential(form: PraeLuxFormData, calculated: PraeLuxCalculatedValues) {
+  const explicit = parseMoneyInput(form.optionalPotentialUntilTarget)
+  if (explicit !== undefined) {
+    return `Optionales Zusatzpotenzial: ${formatCurrency(
+      explicit,
+      { plus: explicit >= 0 },
+    )} bis ${calculated.targetAge}. Der Wert ist als separate Modellannahme erfasst.`
   }
-  return undefined
+
+  if (calculated.optionalPotentialUntilTarget !== undefined && calculated.optionalMonthlyInvestment !== undefined) {
+    return `Wenn optional ${formatCurrency(
+      calculated.optionalMonthlyInvestment,
+    )} mtl. zusätzlich eingesetzt werden, ergibt das ohne Renditeannahme ${formatCurrency(
+      calculated.optionalPotentialUntilTarget,
+      { plus: true },
+    )} bis ${calculated.targetAge}.`
+  }
+
+  return 'Kein optionales Zusatzpotenzial ausgewiesen, solange kein separater optionaler Monatsbetrag oder Zielwert erfasst ist.'
 }
 
-const MONEY_PATTERN = /[+\-−]?\s*\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})?\s*€?|[+\-−]?\s*\d+(?:,\d{2})?\s*€/i
+function buildConclusion(
+  form: PraeLuxFormData,
+  impact: Mandantenwirkung,
+  longTermSaving: LongTermSaving,
+  calculated: PraeLuxCalculatedValues,
+) {
+  const custom = cleanText(form.conclusionNote)
+  if (custom) return custom
 
-function extractFirstMoney(value: string) {
-  return parseMoney(value.match(MONEY_PATTERN)?.[0])
+  if (impact.type === 'saving') {
+    const longTermPart =
+      longTermSaving.status === 'present'
+        ? ` Die reine Beitragsersparnis bis ${calculated.targetAge} ist separat ausgewiesen.`
+        : ' Die langfristige Wirkung sollte nach Prüfung der Bestandsbausteine ergänzt werden.'
+    return `Das neue Konzept verbessert die laufende Beitragsstruktur und schafft finanziellen Spielraum. Die bestehende Absicherung wird nicht schlechtgeredet, sondern gezielt optimiert.${longTermPart}`
+  }
+
+  if (impact.type === 'extra') {
+    return 'Das neue Konzept verursacht einen Mehrbeitrag. Entscheidend ist die transparente fachliche Begründung, welche zusätzlichen oder verbesserten Bausteine diesen Mehraufwand erklären.'
+  }
+
+  return 'Die vorliegenden Angaben reichen noch nicht aus, um die finanzielle Wirkung vollständig zu bewerten. Fehlende Werte sind markiert und sollten vor der Mandantenfreigabe ergänzt werden.'
 }
 
-function parseMoney(value: string | undefined) {
+function moneyFactLabel(value: string, suffix: string) {
+  const money = parseMoneyInput(value)
+  if (money !== undefined) return `${formatCurrency(money)} ${suffix}`
+  return cleanText(value) || MISSING
+}
+
+function buildHorizonLabel(calculated: PraeLuxCalculatedValues) {
+  if (calculated.remainingYears === undefined) return MISSING
+  if (calculated.remainingYears === 0) return `bis ${calculated.targetAge} erreicht`
+  return `${calculated.remainingYears} Jahre bis ${calculated.targetAge}`
+}
+
+function hasProductContent(change: EditableProductChange) {
+  return Boolean(
+    cleanText(change.oldProduct) ||
+      cleanText(change.newProduct) ||
+      cleanText(change.monthlyEffect) ||
+      change.effectType !== 'missing',
+  )
+}
+
+function hasValue(value: string) {
+  return parseMoneyInput(value) !== undefined || Boolean(cleanText(value))
+}
+
+function parseInteger(value: string) {
+  const number = Number.parseInt(value.replace(/[^\d-]/g, ''), 10)
+  return Number.isFinite(number) ? number : undefined
+}
+
+function cleanText(value: string | undefined) {
+  return value?.replace(/\s+/g, ' ').trim().slice(0, 160) ?? ''
+}
+
+function formatIsoDate(value: string) {
   if (!value) return undefined
-  const isNegative = /[-−]/.test(value)
-  const cleaned = value
-    .replace(/[^\d,.-]/g, '')
-    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
-    .replace(',', '.')
-  const number = Number.parseFloat(cleaned)
-  if (!Number.isFinite(number)) return undefined
-  return isNegative ? -Math.abs(number) : Math.abs(number)
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return undefined
+  return new Intl.DateTimeFormat('de-DE').format(date)
 }
 
-function toSearchLines(text: string): SearchLine[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => ({ original: line, search: normalizeSearch(line) }))
-}
-
-function normalizeSearch(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/ß/g, 'ss')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\p{L}\p{N}.+€-]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function cleanValue(value: string | undefined) {
-  return value
-    ?.replace(/\s+/g, ' ')
-    .replace(/[;|]+$/g, '')
-    .trim()
-    .slice(0, 120)
-}
-
-function isGenericLabel(value: string) {
-  return /^(basisdatenblatt|finanzgutachten|bestandsaufnahme|empfohlenes konzept)$/i.test(value.trim())
-}
-
-function calculateAge(birthDate: string) {
-  const match = birthDate.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/)
-  if (!match) return undefined
-  const year = Number(match[3].length === 2 ? `19${match[3]}` : match[3])
-  const month = Number(match[2]) - 1
-  const day = Number(match[1])
-  const birth = new Date(year, month, day)
+function calculateAgeFromIsoDate(value: string) {
+  if (!value) return undefined
+  const birth = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(birth.getTime())) return undefined
   const today = new Date()
   let age = today.getFullYear() - birth.getFullYear()
   const beforeBirthday =
     today.getMonth() < birth.getMonth() ||
     (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())
   if (beforeBirthday) age -= 1
-  return age > 0 && age < 100 ? age : undefined
-}
-
-const PRODUCT_KEYWORDS = [
-  { title: 'Haftpflicht', search: 'haftpflicht' },
-  { title: 'Krankenkasse', search: 'krankenkasse' },
-  { title: 'Zahnzusatz', search: 'zahn' },
-  { title: 'Rechtsschutz', search: 'rechtsschutz' },
-  { title: 'Altersvorsorge', search: 'altersvorsorge' },
-  { title: 'Berufsunfähigkeit', search: 'berufsunfahigkeit' },
-  { title: 'Unfall', search: 'unfall' },
-  { title: 'Hausrat', search: 'hausrat' },
-  { title: 'Kfz', search: 'kfz' },
-  { title: 'Absicherung', search: 'absicherung' },
-  { title: 'Baustein', search: 'baustein' },
-]
-
-function detectProductTitle(searchLine: string) {
-  return PRODUCT_KEYWORDS.find((keyword) => searchLine.includes(keyword.search))?.title || 'Baustein'
+  return age >= 0 && age < 110 ? age : undefined
 }
