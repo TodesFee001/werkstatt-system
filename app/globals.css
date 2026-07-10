@@ -321,27 +321,36 @@ textarea:focus {
   line-height: 1.45;
 }
 
-.step-note {
-  margin: 0 0 12px;
-  border: 1px solid rgba(199, 163, 92, 0.48);
+.concept-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.concept-group {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbf5e6;
+  padding: 12px;
+}
+
+.concept-group legend {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 4px;
   color: var(--ink);
-  padding: 10px 12px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-
-.step-note strong {
+  font-size: 13px;
   font-weight: 900;
+  text-transform: uppercase;
 }
 
-.secondary-note {
-  margin: 12px 0 0;
-  background: var(--surface);
-  border-color: var(--line);
+.concept-group legend span {
   color: var(--muted);
+  font-size: 11px;
 }
 
 .field-grid {
@@ -369,14 +378,6 @@ textarea:focus {
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
-}
-
-.field em {
-  color: var(--muted);
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 600;
-  line-height: 1.35;
 }
 
 .full-field {
@@ -761,6 +762,7 @@ canvas {
   .field-grid,
   .field-grid.compact,
   .field-grid.product-fields,
+  .concept-groups,
   .readout-grid {
     grid-template-columns: 1fr;
   }
