@@ -208,21 +208,30 @@ function drawChanges(ctx: CanvasRenderingContext2D, changes: ProductChange[]) {
   const frame = { x: 70, y: 680, w: 1100, h: 250 }
   roundedRect(ctx, frame.x, frame.y, frame.w, frame.h, 18, palette.paper, palette.gold)
 
-  const cards = changes.slice(0, 5)
+  const cards = changes.slice(0, 8)
   const gap = 10
-  const cardW = (frame.w - 40 - gap * 4) / 5
-  const cardH = 176
+  const columns = 4
+  const cardW = (frame.w - 40 - gap * (columns - 1)) / columns
+  const cardH = 86
   cards.forEach((change, index) => {
-    const x = frame.x + 20 + index * (cardW + gap)
-    drawProductCard(ctx, { x, y: frame.y + 52, w: cardW, h: cardH }, change)
+    const col = index % columns
+    const row = Math.floor(index / columns)
+    const x = frame.x + 20 + col * (cardW + gap)
+    const y = frame.y + 54 + row * (cardH + 12)
+    drawProductCard(ctx, { x, y, w: cardW, h: cardH }, change)
   })
 
   setFont(ctx, 14, 700)
   ctx.fillStyle = palette.muted
-  ctx.fillText('Alt-Produkt, Alt-Beitrag, Neu-Produkt, Neu-Beitrag und Wirkung aus Mandantensicht', frame.x + 20, frame.y + 31)
+  ctx.fillText('Acht Kernkategorien mit Alt-Beitrag, Neu-Beitrag und Wirkung aus Mandantensicht', frame.x + 20, frame.y + 31)
 }
 
 function drawProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: ProductChange) {
+  if (rect.h < 130) {
+    drawCompactProductCard(ctx, rect, change)
+    return
+  }
+
   const tone = toneForEffect(change.effectType)
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 12, tone.bg, tone.border)
   drawProductIcon(ctx, rect.x + rect.w / 2, rect.y + 28, change.title, tone.accent)
@@ -257,6 +266,35 @@ function drawProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: Prod
   drawSingleLine(ctx, change.effectLabel, rect.x + rect.w / 2, rect.y + 164, rect.w - 36, 'center')
 }
 
+function drawCompactProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: ProductChange) {
+  const tone = toneForEffect(change.effectType)
+  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 12, tone.bg, tone.border)
+  drawProductIcon(ctx, rect.x + 25, rect.y + 22, change.title, tone.accent, 14)
+
+  setFont(ctx, 10, 900)
+  ctx.fillStyle = palette.ink
+  drawWrappedText(ctx, change.title, rect.x + 48, rect.y + 16, rect.w - 62, { lineHeight: 12, maxLines: 2 })
+
+  setFont(ctx, 9, 900)
+  ctx.fillStyle = palette.muted
+  ctx.fillText('ALT', rect.x + 14, rect.y + 55)
+  setFont(ctx, 10, 800)
+  ctx.fillStyle = change.oldMonthly === undefined ? palette.red : palette.ink
+  drawSingleLine(ctx, change.oldMonthlyLabel, rect.x + 40, rect.y + 55, 86)
+
+  setFont(ctx, 9, 900)
+  ctx.fillStyle = palette.muted
+  ctx.fillText('NEU', rect.x + 132, rect.y + 55)
+  setFont(ctx, 10, 800)
+  ctx.fillStyle = change.newMonthly === undefined ? palette.red : palette.ink
+  drawSingleLine(ctx, change.newMonthlyLabel, rect.x + 160, rect.y + 55, rect.w - 172)
+
+  roundedRect(ctx, rect.x + 12, rect.y + 64, rect.w - 24, 18, 9, tone.badge, tone.border)
+  setFont(ctx, 10, 900)
+  ctx.fillStyle = tone.accent
+  drawSingleLine(ctx, change.effectLabel, rect.x + rect.w / 2, rect.y + 77, rect.w - 34, 'center')
+}
+
 function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData) {
   drawSectionTitle(ctx, '5', `Reine Beitragsersparnis bis ${data.targetAge}`, 70, 972, palette.green)
 
@@ -272,13 +310,17 @@ function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData) {
   setFont(ctx, 18, 900)
   ctx.fillStyle = palette.muted
   ctx.fillText('GESAMTVORTEIL', rect.x + 156, rect.y + 52)
-  setFont(ctx, 50, 900)
+  setFont(ctx, isPresent ? 50 : 32, 900)
   ctx.fillStyle = isPresent ? palette.green : palette.amber
   drawSingleLine(ctx, data.longTermSaving.label, rect.x + 156, rect.y + 111, 380)
 
   setFont(ctx, 14, 800)
   ctx.fillStyle = palette.muted
-  drawSingleLine(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 140, 380)
+  if (isPresent) {
+    drawSingleLine(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 140, 380)
+  } else {
+    drawWrappedText(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 134, 380, { lineHeight: 18, maxLines: 2 })
+  }
 
   setFont(ctx, 18, 600)
   ctx.fillStyle = palette.ink
@@ -397,18 +439,19 @@ function drawFactIcon(ctx: CanvasRenderingContext2D, x: number, y: number, index
   drawSingleLine(ctx, ['G', 'A', '€', '+', 'Z'][index] ?? '•', x, y + 4, 24, 'center')
 }
 
-function drawProductIcon(ctx: CanvasRenderingContext2D, x: number, y: number, title: string, color: string) {
+function drawProductIcon(ctx: CanvasRenderingContext2D, x: number, y: number, title: string, color: string, radius = 19) {
   ctx.strokeStyle = color
   ctx.fillStyle = palette.paper
   ctx.lineWidth = 2.4
   ctx.beginPath()
-  ctx.arc(x, y, 19, 0, Math.PI * 2)
+  ctx.arc(x, y, radius, 0, Math.PI * 2)
   ctx.fill()
   ctx.stroke()
 
-  setFont(ctx, 14, 900)
+  const icon = iconInitial(title)
+  setFont(ctx, icon.length > 1 ? 11 : 14, 900)
   ctx.fillStyle = color
-  drawSingleLine(ctx, iconInitial(title), x, y + 5, 28, 'center')
+  drawSingleLine(ctx, icon, x, y + 5, radius * 1.6, 'center')
 }
 
 function drawSavingsIcon(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {
@@ -459,10 +502,20 @@ function drawMiniNoticeIcon(ctx: CanvasRenderingContext2D, x: number, y: number)
 }
 
 function iconInitial(title: string) {
-  if (title === 'Krankenkasse') return '+'
-  if (title === 'Zahnzusatz') return 'Z'
-  if (title === 'Rechtsschutz') return '§'
-  if (title === 'Altersvorsorge') return 'A'
+  const normalized = title
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ß/g, 'ss')
+    .toLocaleLowerCase('de-DE')
+
+  if (normalized.includes('berufsun')) return 'BU'
+  if (normalized.includes('haftpflicht')) return 'HP'
+  if (normalized.includes('unfall')) return 'U'
+  if (normalized.includes('kranken') || normalized.includes('pflege') || normalized.includes('krankenkasse')) return 'KV'
+  if (normalized.includes('altersvorsorge')) return 'AV'
+  if (normalized.includes('hausrat')) return 'HR'
+  if (normalized.includes('zahn')) return 'ZZ'
+  if (normalized.includes('rechtsschutz')) return '§'
   return title.slice(0, 1).toUpperCase()
 }
 

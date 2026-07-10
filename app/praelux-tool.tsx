@@ -46,7 +46,7 @@ const steps = [
     tab: 'Änderungen',
     eyebrow: 'Schritt 3',
     description:
-      'Trage einzelne Produkte, Tarife oder Krankenkassen mit altem und neuem Beitrag ein. Die Wirkung wird je Baustein automatisch erkannt und kann in die Gesamtbeiträge übernommen werden.',
+      'Trage die acht Kernkategorien mit altem und neuem Beitrag ein. Die Wirkung wird je Baustein automatisch erkannt und kann in die Gesamtbeiträge übernommen werden.',
   },
   {
     title: 'Langfristwirkung',
@@ -762,12 +762,12 @@ function formatYearly(value: number | undefined) {
 }
 
 function getProductPlaceholders(title: string) {
-  const normalized = title.trim().toLocaleLowerCase('de-DE')
+  const normalized = normalizeProductTitle(title)
 
-  if (normalized.includes('krankenkasse')) {
+  if (normalized.includes('berufsun')) {
     return {
-      oldProduct: 'aktuelle Krankenkasse',
-      newProduct: 'neue Krankenkasse',
+      oldProduct: 'aktueller BU-Tarif',
+      newProduct: 'neuer BU-Tarif',
     }
   }
 
@@ -775,6 +775,34 @@ function getProductPlaceholders(title: string) {
     return {
       oldProduct: 'aktueller Haftpflicht-Tarif',
       newProduct: 'neuer Haftpflicht-Tarif',
+    }
+  }
+
+  if (normalized.includes('unfall')) {
+    return {
+      oldProduct: 'aktuelle Unfallversicherung',
+      newProduct: 'neue Unfallversicherung',
+    }
+  }
+
+  if (normalized.includes('kranken') || normalized.includes('pflege') || normalized.includes('krankenkasse')) {
+    return {
+      oldProduct: 'aktuelle Kranken-/Pflegeversicherung',
+      newProduct: 'neue Kranken-/Pflegeversicherung',
+    }
+  }
+
+  if (normalized.includes('altersvorsorge')) {
+    return {
+      oldProduct: 'aktueller Altersvorsorge-Vertrag',
+      newProduct: 'neuer Altersvorsorge-Vertrag',
+    }
+  }
+
+  if (normalized.includes('hausrat')) {
+    return {
+      oldProduct: 'aktuelle Hausratsversicherung',
+      newProduct: 'neue Hausratsversicherung',
     }
   }
 
@@ -792,17 +820,19 @@ function getProductPlaceholders(title: string) {
     }
   }
 
-  if (normalized.includes('altersvorsorge')) {
-    return {
-      oldProduct: 'aktueller Altersvorsorge-Vertrag',
-      newProduct: 'neuer Altersvorsorge-Vertrag',
-    }
-  }
-
   return {
     oldProduct: 'aktueller Anbieter / Tarif',
     newProduct: 'neuer Anbieter / Tarif',
   }
+}
+
+function normalizeProductTitle(value: string) {
+  return value
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ß/g, 'ss')
+    .toLocaleLowerCase('de-DE')
 }
 
 function formatImpact(value: number | undefined, yearly = false) {
@@ -831,25 +861,75 @@ function formatMoneyInput(value: number) {
   }).format(value)
 }
 
+const legacyProductAliases: Record<string, string> = {
+  haftpflicht: 'dienstundprivathaftpflichtversicherung',
+  privatehaftpflichtversicherung: 'dienstundprivathaftpflichtversicherung',
+  dienstundprivathaftpflicht: 'dienstundprivathaftpflichtversicherung',
+  krankenkasse: 'krankenundpflegeversicherung',
+  krankenversicherung: 'krankenundpflegeversicherung',
+  zahnzusatz: 'zahnzusatzversicherung',
+  rechtsschutz: 'rechtsschutzversicherung',
+}
+
 function hydrateFormDraft(value: unknown): PraeLuxFormData {
   const empty = createEmptyPraeLuxForm()
   if (!value || typeof value !== 'object') return empty
 
   const draft = value as Partial<PraeLuxFormData>
   const draftProducts = Array.isArray(draft.productChanges) ? draft.productChanges : []
-  const fallbackProduct = empty.productChanges[0]
 
   return {
     ...empty,
     ...draft,
-    productChanges:
-      draftProducts.length > 0
-        ? draftProducts.map((change, index) => ({
-            ...fallbackProduct,
-            ...(empty.productChanges[index] ?? {}),
-            ...change,
-            id: typeof change.id === 'string' && change.id ? change.id : `baustein-${index + 1}`,
-          }))
-        : empty.productChanges,
+    productChanges: draftProducts.length > 0 ? migrateProductDrafts(draftProducts, empty.productChanges) : empty.productChanges,
   }
+}
+
+function migrateProductDrafts(draftProducts: unknown[], defaults: EditableProductChange[]) {
+  const drafts = draftProducts.filter(isEditableProductDraft)
+  const draftIndexesByKey = new Map<string, number>()
+  const usedIndexes = new Set<number>()
+
+  drafts.forEach((draft, index) => {
+    const keys = [draft.id, draft.title]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0)
+      .map(normalizeProductDraftKey)
+
+    for (const key of keys) {
+      draftIndexesByKey.set(legacyProductAliases[key] ?? key, index)
+    }
+  })
+
+  const mergedDefaults = defaults.map((defaultProduct) => {
+    const defaultKey = normalizeProductDraftKey(defaultProduct.id)
+    const draftIndex = draftIndexesByKey.get(defaultKey)
+    const draft = draftIndex === undefined ? undefined : drafts[draftIndex]
+
+    if (draftIndex !== undefined) usedIndexes.add(draftIndex)
+
+    return {
+      ...defaultProduct,
+      ...(draft ?? {}),
+      id: defaultProduct.id,
+      title: defaultProduct.title,
+    }
+  })
+
+  const customDrafts = drafts
+    .filter((_, index) => !usedIndexes.has(index))
+    .map((draft, index) => ({
+      ...defaults[0],
+      ...draft,
+      id: typeof draft.id === 'string' && draft.id ? draft.id : `baustein-${defaults.length + index + 1}`,
+    }))
+
+  return [...mergedDefaults, ...customDrafts]
+}
+
+function isEditableProductDraft(value: unknown): value is Partial<EditableProductChange> {
+  return Boolean(value && typeof value === 'object')
+}
+
+function normalizeProductDraftKey(value: string) {
+  return normalizeProductTitle(value).replace(/[^a-z0-9]+/g, '')
 }
