@@ -528,6 +528,42 @@ export function deriveProductEffect(change: EditableProductChange) {
   }
 }
 
+export function calculateProductContributionTotals(productChanges: EditableProductChange[]) {
+  let oldTotal = 0
+  let newTotal = 0
+  let oldCount = 0
+  let newCount = 0
+  let pairedCount = 0
+
+  for (const change of productChanges) {
+    const oldMonthly = parseMoneyInput(change.oldMonthly)
+    const newMonthly = parseMoneyInput(change.newMonthly)
+    if (oldMonthly !== undefined) {
+      oldTotal += oldMonthly
+      oldCount += 1
+    }
+    if (newMonthly !== undefined) {
+      newTotal += newMonthly
+      newCount += 1
+    }
+    if (oldMonthly !== undefined && newMonthly !== undefined) pairedCount += 1
+  }
+
+  const hasOldTotal = oldCount > 0
+  const hasNewTotal = newCount > 0
+  const effect = hasOldTotal && hasNewTotal ? oldTotal - newTotal : undefined
+
+  return {
+    oldTotal: hasOldTotal ? oldTotal : undefined,
+    newTotal: hasNewTotal ? newTotal : undefined,
+    effect,
+    oldCount,
+    newCount,
+    pairedCount,
+    canApply: hasOldTotal && hasNewTotal,
+  }
+}
+
 function inferProductEffectType(value: number | undefined): ProductEffectType {
   if (value === undefined) return 'missing'
   if (Math.abs(value) < 0.005) return 'neutral'
@@ -636,7 +672,7 @@ function buildHorizonLabel(calculated: PraeLuxCalculatedValues) {
 
 function hasProductContent(change: EditableProductChange) {
   return Boolean(
-      cleanText(change.oldProduct) ||
+    cleanText(change.oldProduct) ||
       cleanText(change.newProduct) ||
       cleanText(change.oldMonthly) ||
       cleanText(change.newMonthly) ||

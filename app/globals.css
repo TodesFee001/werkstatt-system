@@ -172,6 +172,10 @@ textarea:focus {
   font-weight: 800;
 }
 
+.subtle-status {
+  color: rgba(255, 255, 255, 0.72);
+}
+
 .primary-action {
   background: var(--gold);
   color: var(--navy);
@@ -289,7 +293,7 @@ textarea:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(232, 237, 241, 0.48), rgba(255, 255, 255, 0));
-  padding: 18px;
+  padding: 16px;
 }
 
 .step-heading {
@@ -312,7 +316,7 @@ textarea:focus {
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 13px;
+  gap: 11px;
 }
 
 .field-grid.compact {
@@ -326,7 +330,7 @@ textarea:focus {
 .field {
   min-width: 0;
   display: grid;
-  gap: 7px;
+  gap: 6px;
 }
 
 .field span {
@@ -390,22 +394,41 @@ textarea:focus {
 
 .product-list {
   display: grid;
-  gap: 12px;
+  gap: 9px;
+}
+
+.product-tools {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  align-items: stretch;
+}
+
+.product-tools .readout {
+  min-height: 58px;
+  padding: 9px 10px;
+}
+
+.compact-action {
+  grid-column: 1 / -1;
+  min-height: 40px;
+  align-self: stretch;
+  white-space: nowrap;
 }
 
 .product-editor {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--paper);
-  padding: 12px;
+  padding: 10px;
 }
 
 .product-editor-head {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .product-editor-head span {
@@ -425,17 +448,27 @@ textarea:focus {
   font-weight: 900;
 }
 
+.product-fields input,
+.product-fields select {
+  min-height: 38px;
+  padding: 0 9px;
+}
+
+.product-fields .field span {
+  font-size: 11px;
+}
+
 .product-effect {
-  min-height: 46px;
+  min-height: 38px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 12px;
+  margin-top: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .product-effect span {
@@ -447,7 +480,7 @@ textarea:focus {
 
 .product-effect strong {
   color: var(--ink);
-  font-size: 16px;
+  font-size: 15px;
   overflow-wrap: anywhere;
   text-align: right;
 }
@@ -690,6 +723,11 @@ canvas {
   .field-grid.compact,
   .field-grid.product-fields,
   .readout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-tools,
+  .export-grid .readout-grid {
     grid-template-columns: 1fr;
   }
 

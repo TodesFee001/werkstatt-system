@@ -5,6 +5,7 @@ import { drawPraeLuxOverview } from '@/lib/praelux-canvas'
 import {
   buildOverviewFromForm,
   calculatePraeLuxForm,
+  calculateProductContributionTotals,
   createEmptyPraeLuxForm,
   deriveProductEffect,
   formatCurrency,
@@ -35,14 +36,50 @@ const effectOptions: { value: ProductEffectType; label: string }[] = [
   { value: 'missing', label: 'Noch offen' },
 ]
 
+const DRAFT_STORAGE_KEY = 'praelux-form-draft-v2'
+
 export default function PraeLuxTool() {
   const [form, setForm] = useState<PraeLuxFormData>(() => createEmptyPraeLuxForm())
   const [stepIndex, setStepIndex] = useState(0)
+  const [isDraftReady, setIsDraftReady] = useState(false)
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const data = useMemo(() => buildOverviewFromForm(form), [form])
   const calculated = useMemo(() => calculatePraeLuxForm(form), [form])
+  const productTotals = useMemo(() => calculateProductContributionTotals(form.productChanges), [form.productChanges])
   const currentStep = steps[stepIndex]
   const presentCount = data.qualityChecks.filter((check) => check.ok).length
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      try {
+        const storedDraft = window.localStorage.getItem(DRAFT_STORAGE_KEY)
+        if (storedDraft) {
+          setForm(hydrateFormDraft(JSON.parse(storedDraft)))
+          setDraftSavedAt('geladen')
+        }
+      } catch {
+        window.localStorage.removeItem(DRAFT_STORAGE_KEY)
+      } finally {
+        setIsDraftReady(true)
+      }
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [])
+
+  useEffect(() => {
+    if (!isDraftReady) return undefined
+    const timeoutId = window.setTimeout(() => {
+      window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(form))
+      setDraftSavedAt(
+        new Intl.DateTimeFormat('de-DE', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(new Date()),
+      )
+    }, 300)
+    return () => window.clearTimeout(timeoutId)
+  }, [form, isDraftReady])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -115,8 +152,10 @@ export default function PraeLuxTool() {
   }
 
   function resetForm() {
+    window.localStorage.removeItem(DRAFT_STORAGE_KEY)
     setForm(createEmptyPraeLuxForm())
     setStepIndex(0)
+    setDraftSavedAt(null)
   }
 
   function goNext() {
@@ -125,6 +164,17 @@ export default function PraeLuxTool() {
 
   function goBack() {
     setStepIndex((index) => Math.max(index - 1, 0))
+  }
+
+  function applyProductTotals() {
+    const oldTotal = productTotals.oldTotal
+    const newTotal = productTotals.newTotal
+    if (!productTotals.canApply || oldTotal === undefined || newTotal === undefined) return
+    setForm((current) => ({
+      ...current,
+      existingMonthly: formatMoneyInput(oldTotal),
+      recommendedMonthly: formatMoneyInput(newTotal),
+    }))
   }
 
   function renderStep() {
@@ -234,6 +284,19 @@ export default function PraeLuxTool() {
     if (stepIndex === 2) {
       return (
         <div className="product-list">
+          <div className="product-tools">
+            <Readout label="Bestand" value={formatMonthly(productTotals.oldTotal)} />
+            <Readout label="Neu" value={formatMonthly(productTotals.newTotal)} />
+            <Readout label="Differenz" value={formatImpact(productTotals.effect)} tone="strong" />
+            <button
+              type="button"
+              className="secondary-action compact-action"
+              onClick={applyProductTotals}
+              disabled={!productTotals.canApply}
+            >
+              Summen übernehmen
+            </button>
+          </div>
           {form.productChanges.map((change, index) => {
             const preview = deriveProductEffect(change)
             const isAutoCalculated = preview.effectSource === 'calculated'
@@ -263,7 +326,7 @@ export default function PraeLuxTool() {
                     placeholder="aktuelle Krankenkasse / Tarif"
                   />
                   <TextField
-                    label="Aktueller Beitrag mtl."
+                    label="Akt. Beitrag mtl."
                     value={change.oldMonthly}
                     onChange={(value) => updateProduct(index, { oldMonthly: value })}
                     inputMode="decimal"
@@ -429,6 +492,11 @@ export default function PraeLuxTool() {
           <span className="status-pill">
             {presentCount}/{data.qualityChecks.length} Datenpunkte
           </span>
+          {draftSavedAt && (
+            <span className="status-pill subtle-status">
+              Entwurf {draftSavedAt === 'geladen' ? 'geladen' : `gespeichert ${draftSavedAt}`}
+            </span>
+          )}
           <button type="button" className="secondary-action" onClick={resetForm}>
             Neu starten
           </button>
@@ -614,4 +682,34 @@ function formatInterestRate(value: number | undefined) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)} %`
+}
+
+function formatMoneyInput(value: number) {
+  return new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
+}
+
+function hydrateFormDraft(value: unknown): PraeLuxFormData {
+  const empty = createEmptyPraeLuxForm()
+  if (!value || typeof value !== 'object') return empty
+
+  const draft = value as Partial<PraeLuxFormData>
+  const draftProducts = Array.isArray(draft.productChanges) ? draft.productChanges : []
+  const fallbackProduct = empty.productChanges[0]
+
+  return {
+    ...empty,
+    ...draft,
+    productChanges:
+      draftProducts.length > 0
+        ? draftProducts.map((change, index) => ({
+            ...fallbackProduct,
+            ...(empty.productChanges[index] ?? {}),
+            ...change,
+            id: typeof change.id === 'string' && change.id ? change.id : `baustein-${index + 1}`,
+          }))
+        : empty.productChanges,
+  }
 }
