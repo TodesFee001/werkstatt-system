@@ -12,6 +12,7 @@ import {
   deriveProductEffect,
   formatCurrency,
   formatOptionalCurrency,
+  parseMoneyInput,
   slugifyName,
   type EditableProductChange,
   type PraeLuxFormData,
@@ -268,14 +269,17 @@ export default function PraeLuxTool() {
         return
       }
 
+      const conceptValues = resolveFinanzgutachtenConceptValues(result.values, result.products)
+      const conceptValueCount = countImportedConceptValues(conceptValues)
+
       setForm((current) => ({
         ...current,
-        ...result.values,
+        ...conceptValues,
         productChanges: mergeFinanzgutachtenProducts(current.productChanges, result.products),
       }))
       setFinanzgutachtenImport({
         status: 'success',
-        message: `${result.labels.length} Summen, ${result.products.length} Kategorien übernommen`,
+        message: `${conceptValueCount} Summenfelder, ${result.products.length} Kategorien übernommen`,
       })
     } catch {
       setFinanzgutachtenImport({ status: 'error', message: 'PDF konnte nicht gelesen werden' })
@@ -1009,6 +1013,91 @@ function mergeFinanzgutachtenProducts(
       effectType: deriveProductEffect(nextProduct).effectType,
     }
   })
+}
+
+function resolveFinanzgutachtenConceptValues(
+  values: Partial<Pick<PraeLuxFormData, 'existingMonthly' | 'existingYearly' | 'recommendedMonthly' | 'recommendedYearly'>>,
+  importedProducts: FinanzgutachtenProductImport[],
+) {
+  const totals = calculateImportedProductTotals(importedProducts)
+  const next = { ...values }
+
+  applyImportedProductTotal(next, 'existingMonthly', 'existingYearly', totals.oldTotal, totals.oldCount)
+  applyImportedProductTotal(next, 'recommendedMonthly', 'recommendedYearly', totals.newTotal, totals.newCount)
+  discardSingleProductTotal(next, 'existingMonthly', 'existingYearly', totals.singleOldMonthly, totals.oldCount)
+  discardSingleProductTotal(next, 'recommendedMonthly', 'recommendedYearly', totals.singleNewMonthly, totals.newCount)
+
+  return next
+}
+
+function calculateImportedProductTotals(importedProducts: FinanzgutachtenProductImport[]) {
+  let oldTotal = 0
+  let newTotal = 0
+  let oldCount = 0
+  let newCount = 0
+  let singleOldMonthly: number | undefined
+  let singleNewMonthly: number | undefined
+
+  for (const product of importedProducts) {
+    const oldMonthly = parseMoneyInput(product.oldMonthly)
+    const newMonthly = parseMoneyInput(product.newMonthly)
+
+    if (oldMonthly !== undefined) {
+      oldTotal += oldMonthly
+      oldCount += 1
+      singleOldMonthly = oldMonthly
+    }
+    if (newMonthly !== undefined) {
+      newTotal += newMonthly
+      newCount += 1
+      singleNewMonthly = newMonthly
+    }
+  }
+
+  return {
+    oldTotal: oldCount > 0 ? oldTotal : undefined,
+    newTotal: newCount > 0 ? newTotal : undefined,
+    oldCount,
+    newCount,
+    singleOldMonthly,
+    singleNewMonthly,
+  }
+}
+
+function applyImportedProductTotal(
+  values: Partial<Pick<PraeLuxFormData, 'existingMonthly' | 'existingYearly' | 'recommendedMonthly' | 'recommendedYearly'>>,
+  monthlyKey: 'existingMonthly' | 'recommendedMonthly',
+  yearlyKey: 'existingYearly' | 'recommendedYearly',
+  total: number | undefined,
+  count: number,
+) {
+  if (total === undefined || count < 2) return
+  const importedMonthly = parseMoneyInput(values[monthlyKey])
+  const monthly = importedMonthly === undefined || total > importedMonthly + 0.01 ? total : importedMonthly
+  values[monthlyKey] = formatMoneyInput(monthly)
+  values[yearlyKey] = formatMoneyInput(monthly * 12)
+}
+
+function discardSingleProductTotal(
+  values: Partial<Pick<PraeLuxFormData, 'existingMonthly' | 'existingYearly' | 'recommendedMonthly' | 'recommendedYearly'>>,
+  monthlyKey: 'existingMonthly' | 'recommendedMonthly',
+  yearlyKey: 'existingYearly' | 'recommendedYearly',
+  singleMonthly: number | undefined,
+  count: number,
+) {
+  if (count !== 1 || singleMonthly === undefined) return
+
+  const importedMonthly = parseMoneyInput(values[monthlyKey])
+  if (importedMonthly !== undefined && Math.abs(importedMonthly - singleMonthly) < 0.01) {
+    delete values[monthlyKey]
+    delete values[yearlyKey]
+  }
+}
+
+function countImportedConceptValues(
+  values: Partial<Pick<PraeLuxFormData, 'existingMonthly' | 'existingYearly' | 'recommendedMonthly' | 'recommendedYearly'>>,
+) {
+  return Object.values(values).filter(Boolean).length
 }
 
 function isEditableProductDraft(value: unknown): value is Partial<EditableProductChange> {
