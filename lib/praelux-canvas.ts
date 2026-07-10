@@ -310,9 +310,12 @@ function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData) {
   setFont(ctx, 18, 900)
   ctx.fillStyle = palette.muted
   ctx.fillText('GESAMTVORTEIL', rect.x + 156, rect.y + 52)
-  setFont(ctx, isPresent ? 50 : 32, 900)
   ctx.fillStyle = isPresent ? palette.green : palette.amber
-  drawSingleLine(ctx, data.longTermSaving.label, rect.x + 156, rect.y + 111, 380)
+  drawFittedSingleLine(ctx, data.longTermSaving.label, rect.x + 156, rect.y + 111, 386, {
+    maxSize: isPresent ? 50 : 32,
+    minSize: 22,
+    weight: 900,
+  })
 
   setFont(ctx, 14, 800)
   ctx.fillStyle = palette.muted
@@ -590,6 +593,30 @@ function drawSingleLine(
     output = `${output.slice(0, -4).trim()}…`
   }
   ctx.fillText(output, x, y)
+  ctx.textAlign = previousAlign
+}
+
+function drawFittedSingleLine(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  options: { maxSize: number; minSize: number; weight: number },
+  align: CanvasTextAlign = 'left',
+) {
+  const previousAlign = ctx.textAlign
+  ctx.textAlign = align
+
+  let fontSize = options.maxSize
+  setFont(ctx, fontSize, options.weight)
+
+  while (ctx.measureText(text).width > maxWidth && fontSize > options.minSize) {
+    fontSize -= 1
+    setFont(ctx, fontSize, options.weight)
+  }
+
+  ctx.fillText(text, x, y)
   ctx.textAlign = previousAlign
 }
 
