@@ -320,7 +320,7 @@ function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData) {
   setFont(ctx, 14, 800)
   ctx.fillStyle = palette.muted
   if (isPresent) {
-    drawSingleLine(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 140, 380)
+    drawWrappedText(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 136, 380, { lineHeight: 17, maxLines: 2 })
   } else {
     drawWrappedText(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 134, 380, { lineHeight: 18, maxLines: 2 })
   }

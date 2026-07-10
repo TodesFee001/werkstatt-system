@@ -353,7 +353,7 @@ export function buildOverviewFromForm(form: PraeLuxFormData): OverviewData {
     conclusion,
     notices: [
       `Laufzeit modellhaft bis ${calculated.targetAge}`,
-      'Beitragsersparnis ohne Zinseszins gerechnet',
+      buildLongTermSavingNotice(calculated),
       'Optionaler Zinssatz ist modellhaft',
       'Neue Bausteine nicht in reiner Beitragsersparnis enthalten',
       'Fehlende Werte bleiben markiert',
@@ -617,7 +617,7 @@ function buildLongTermSaving(form: PraeLuxFormData, calculated: PraeLuxCalculate
       value: explicit,
       label: formatCurrency(explicit, { plus: explicit >= 0 }),
       status: 'present',
-      note: `manuell erfasst bis ${calculated.targetAge}`,
+      note: buildMonthlyEquivalentNote(explicit, calculated),
     }
   }
 
@@ -626,9 +626,7 @@ function buildLongTermSaving(form: PraeLuxFormData, calculated: PraeLuxCalculate
       value: calculated.pureSavingUntilTarget,
       label: formatCurrency(calculated.pureSavingUntilTarget, { plus: calculated.pureSavingUntilTarget >= 0 }),
       status: 'present',
-      note: `${formatCurrency(calculated.optimizedMonthlySaving)} mtl. × 12 × ${
-        calculated.remainingYears ?? 0
-      } Jahre`,
+      note: buildMonthlyEquivalentNote(calculated.pureSavingUntilTarget, calculated),
     }
   }
 
@@ -637,6 +635,37 @@ function buildLongTermSaving(form: PraeLuxFormData, calculated: PraeLuxCalculate
     status: 'check',
     note: 'Bitte optimierte Bestandsersparnis und Geburtsdatum erfassen.',
   }
+}
+
+function buildMonthlyEquivalentNote(total: number, calculated: PraeLuxCalculatedValues) {
+  const months = calculationMonths(calculated.remainingYears)
+
+  if (months === undefined) return `Monatswert nach Geburtsdatum und Zielalter berechenbar.`
+
+  const annualRate =
+    calculated.generalInterestRate !== undefined && calculated.generalInterestRate > 0
+      ? calculated.generalInterestRate
+      : undefined
+  const monthlyEquivalent =
+    annualRate === undefined
+      ? total / months
+      : calculateMonthlyDepositForTarget(total, months, annualRate)
+
+  if (annualRate !== undefined) {
+    return `Dies entspricht ca. ${formatCurrency(monthlyEquivalent)} pro Monat bei ${formatPercent(
+      annualRate,
+    )} Zinseszins p.a.`
+  }
+
+  return `Dies entspricht ca. ${formatCurrency(monthlyEquivalent)} pro Monat ohne Zinseszins gerechnet.`
+}
+
+function buildLongTermSavingNotice(calculated: PraeLuxCalculatedValues) {
+  if (calculated.generalInterestRate !== undefined && calculated.generalInterestRate > 0) {
+    return `Zinseszins mit ${formatPercent(calculated.generalInterestRate)} p.a. modelliert`
+  }
+
+  return 'Beitragsersparnis ohne Zinseszins gerechnet'
 }
 
 function buildOptionalPotential(form: PraeLuxFormData, calculated: PraeLuxCalculatedValues) {
@@ -717,6 +746,19 @@ function calculateMonthlySavingsPotential(monthlyAmount: number, years: number, 
   if (annualRate === undefined || annualRate <= 0) return monthlyAmount * months
   const monthlyRate = annualRate / 100 / 12
   return monthlyAmount * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate)
+}
+
+function calculateMonthlyDepositForTarget(targetValue: number, months: number, annualRate: number) {
+  if (months <= 0) return 0
+  const monthlyRate = annualRate / 100 / 12
+  if (monthlyRate <= 0) return targetValue / months
+  return targetValue / ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate)
+}
+
+function calculationMonths(years: number | undefined) {
+  if (years === undefined) return undefined
+  const months = Math.max(0, Math.round(years * 12))
+  return months > 0 ? months : undefined
 }
 
 function formatPercent(value: number) {
