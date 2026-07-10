@@ -353,6 +353,70 @@ textarea:focus {
   font-size: 11px;
 }
 
+.basisdaten-import {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px 12px;
+}
+
+.basisdaten-import strong,
+.basisdaten-import span {
+  display: block;
+}
+
+.basisdaten-import strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.basisdaten-import span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.basisdaten-import.success {
+  border-color: rgba(23, 118, 77, 0.28);
+  background: #e8f5ed;
+}
+
+.basisdaten-import.error {
+  border-color: rgba(169, 60, 60, 0.32);
+  background: #faeeee;
+}
+
+.pdf-import-action {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(10, 31, 56, 0.13);
+  border-radius: 8px;
+  padding: 0 14px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pdf-import-action input {
+  display: none;
+}
+
+.pdf-import-action.disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -753,6 +817,14 @@ canvas {
   .workspace {
     padding: 14px;
     grid-template-columns: 1fr;
+  }
+
+  .basisdaten-import {
+    grid-template-columns: 1fr;
+  }
+
+  .pdf-import-action {
+    justify-self: start;
   }
 
   .stepper {

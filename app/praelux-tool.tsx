@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { extractBasisdatenFromPdf } from '@/lib/basisdaten-pdf'
 import { drawPraeLuxOverview } from '@/lib/praelux-canvas'
 import {
   buildOverviewFromForm,
@@ -19,6 +20,11 @@ import {
 type ScalarField = {
   [Key in keyof PraeLuxFormData]: PraeLuxFormData[Key] extends string ? Key : never
 }[keyof PraeLuxFormData]
+
+type BasisdatenImportState = {
+  status: 'idle' | 'loading' | 'success' | 'error'
+  message: string
+}
 
 const steps = [
   {
@@ -67,6 +73,10 @@ export default function PraeLuxTool() {
   const [stepIndex, setStepIndex] = useState(0)
   const [isDraftReady, setIsDraftReady] = useState(false)
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
+  const [basisdatenImport, setBasisdatenImport] = useState<BasisdatenImportState>({
+    status: 'idle',
+    message: 'PDF auswählen und Mandantendaten übernehmen',
+  })
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const data = useMemo(() => buildOverviewFromForm(form), [form])
   const calculated = useMemo(() => calculatePraeLuxForm(form), [form])
@@ -201,64 +211,112 @@ export default function PraeLuxTool() {
     }))
   }
 
+  async function handleBasisdatenUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    if (!file) return
+
+    if (!file.name.toLocaleLowerCase('de-DE').endsWith('.pdf')) {
+      setBasisdatenImport({ status: 'error', message: 'Bitte eine PDF-Datei auswählen' })
+      return
+    }
+
+    setBasisdatenImport({ status: 'loading', message: 'PDF wird gelesen' })
+
+    try {
+      const result = await extractBasisdatenFromPdf(file)
+      const importedCount = result.labels.length
+
+      if (importedCount === 0) {
+        setBasisdatenImport({ status: 'error', message: 'Keine Mandantendaten gefunden' })
+        return
+      }
+
+      setForm((current) => ({ ...current, ...result.values }))
+      setBasisdatenImport({
+        status: 'success',
+        message: `${importedCount} Felder übernommen`,
+      })
+    } catch {
+      setBasisdatenImport({ status: 'error', message: 'PDF konnte nicht gelesen werden' })
+    }
+  }
+
   function renderStep() {
     if (stepIndex === 0) {
       return (
-        <div className="field-grid">
-          <TextField
-            label="Mandantenname"
-            value={form.clientName}
-            onChange={(value) => updateField('clientName', value)}
-            placeholder="Max Mustermann"
-          />
-          <TextField
-            label="Geburtsdatum"
-            type="date"
-            value={form.birthDate}
-            onChange={(value) => updateField('birthDate', value)}
-          />
-          <Readout label="Alter" value={calculated.age !== undefined ? `${calculated.age} Jahre` : 'wird berechnet'} />
-          <TextField
-            label="Nettoeinkommen"
-            value={form.netIncome}
-            onChange={(value) => updateField('netIncome', value)}
-            inputMode="decimal"
-            placeholder="3.200 €"
-          />
-          <TextField
-            label="Monatlicher Überschuss"
-            value={form.surplus}
-            onChange={(value) => updateField('surplus', value)}
-            inputMode="decimal"
-            placeholder="650 €"
-          />
-          <TextField
-            label="Anlagehorizont"
-            value={form.horizon}
-            onChange={(value) => updateField('horizon', value)}
-            placeholder={`${calculated.remainingYears ?? ''} Jahre bis ${calculated.targetAge}`.trim()}
-          />
-          <TextField
-            label="Zielalter"
-            value={form.targetAge}
-            onChange={(value) => updateField('targetAge', value)}
-            inputMode="numeric"
-          />
-          <TextField
-            label="Rücklagen"
-            value={form.reserves}
-            onChange={(value) => updateField('reserves', value)}
-            inputMode="decimal"
-            placeholder="optional"
-          />
-          <TextField
-            label="Verbindlichkeiten"
-            value={form.liabilities}
-            onChange={(value) => updateField('liabilities', value)}
-            inputMode="decimal"
-            placeholder="optional"
-          />
-        </div>
+        <>
+          <div className={`basisdaten-import ${basisdatenImport.status}`}>
+            <div>
+              <strong>Basisdatenblatt</strong>
+              <span>{basisdatenImport.message}</span>
+            </div>
+            <label className={`pdf-import-action secondary-action ${basisdatenImport.status === 'loading' ? 'disabled' : ''}`}>
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={handleBasisdatenUpload}
+                disabled={basisdatenImport.status === 'loading'}
+              />
+              {basisdatenImport.status === 'loading' ? 'Wird gelesen' : 'PDF importieren'}
+            </label>
+          </div>
+          <div className="field-grid">
+            <TextField
+              label="Mandantenname"
+              value={form.clientName}
+              onChange={(value) => updateField('clientName', value)}
+              placeholder="Max Mustermann"
+            />
+            <TextField
+              label="Geburtsdatum"
+              type="date"
+              value={form.birthDate}
+              onChange={(value) => updateField('birthDate', value)}
+            />
+            <Readout label="Alter" value={calculated.age !== undefined ? `${calculated.age} Jahre` : 'wird berechnet'} />
+            <TextField
+              label="Nettoeinkommen"
+              value={form.netIncome}
+              onChange={(value) => updateField('netIncome', value)}
+              inputMode="decimal"
+              placeholder="3.200 €"
+            />
+            <TextField
+              label="Monatlicher Überschuss"
+              value={form.surplus}
+              onChange={(value) => updateField('surplus', value)}
+              inputMode="decimal"
+              placeholder="650 €"
+            />
+            <TextField
+              label="Anlagehorizont"
+              value={form.horizon}
+              onChange={(value) => updateField('horizon', value)}
+              placeholder={`${calculated.remainingYears ?? ''} Jahre bis ${calculated.targetAge}`.trim()}
+            />
+            <TextField
+              label="Zielalter"
+              value={form.targetAge}
+              onChange={(value) => updateField('targetAge', value)}
+              inputMode="numeric"
+            />
+            <TextField
+              label="Rücklagen"
+              value={form.reserves}
+              onChange={(value) => updateField('reserves', value)}
+              inputMode="decimal"
+              placeholder="optional"
+            />
+            <TextField
+              label="Verbindlichkeiten"
+              value={form.liabilities}
+              onChange={(value) => updateField('liabilities', value)}
+              inputMode="decimal"
+              placeholder="optional"
+            />
+          </div>
+        </>
       )
     }
 
