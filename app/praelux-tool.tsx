@@ -21,10 +21,34 @@ type ScalarField = {
 }[keyof PraeLuxFormData]
 
 const steps = [
-  { title: 'Mandantendaten', tab: 'Mandant', eyebrow: 'Schritt 1' },
-  { title: 'Bestand & Konzept', tab: 'Bestand', eyebrow: 'Schritt 2' },
-  { title: 'Veränderungen', tab: 'Änderungen', eyebrow: 'Schritt 3' },
-  { title: 'Langfristwirkung', tab: 'Langfrist', eyebrow: 'Schritt 4' },
+  {
+    title: 'Mandantendaten',
+    tab: 'Mandant',
+    eyebrow: 'Schritt 1',
+    description:
+      'Erfasse die Basisdaten des Mandanten. Alter und Anlagehorizont werden aus Geburtsdatum und Zielalter automatisch abgeleitet.',
+  },
+  {
+    title: 'Bestand & Konzept',
+    tab: 'Bestand',
+    eyebrow: 'Schritt 2',
+    description:
+      'Vergleiche die monatlichen Gesamtbeiträge der aktuellen Situation mit dem empfohlenen Konzept. Jahreswerte und direkte Veränderung werden automatisch berechnet.',
+  },
+  {
+    title: 'Veränderungen',
+    tab: 'Änderungen',
+    eyebrow: 'Schritt 3',
+    description:
+      'Trage einzelne Produkte, Tarife oder Krankenkassen mit altem und neuem Beitrag ein. Die Wirkung wird je Baustein automatisch erkannt und kann in die Gesamtbeiträge übernommen werden.',
+  },
+  {
+    title: 'Langfristwirkung',
+    tab: 'Langfrist',
+    eyebrow: 'Schritt 4',
+    description:
+      'Erfasse die reine Bestandsersparnis und optionalen Monatsbetrag samt Zinssatz. Die Wirkung bis zum Zielalter wird daraus modellhaft berechnet.',
+  },
   { title: 'Vorschau & Export', tab: 'Export', eyebrow: 'Schritt 5' },
 ] as const
 
@@ -527,6 +551,7 @@ export default function PraeLuxTool() {
             <div className="step-heading">
               <span>{currentStep.eyebrow}</span>
               <h1>{currentStep.title}</h1>
+              {'description' in currentStep && <p>{currentStep.description}</p>}
             </div>
             {renderStep()}
           </div>
