@@ -206,25 +206,25 @@ function drawBoxHeader(ctx: CanvasRenderingContext2D, rect: Rect, number: string
 }
 
 function drawChanges(ctx: CanvasRenderingContext2D, changes: ProductChange[]) {
-  drawSectionTitle(ctx, '4', 'Wesentliche Veränderungen', 70, 650, palette.gold)
+  drawSectionTitle(ctx, '4', 'Wesentliche Veränderungen', 70, 632, palette.gold)
 
-  const frame = { x: 70, y: 680, w: 1100, h: 250 }
+  const frame = { x: 70, y: 662, w: 1100, h: 386 }
   roundedRect(ctx, frame.x, frame.y, frame.w, frame.h, 18, palette.paper, palette.gold)
 
   const cards = changes.slice(0, 8)
-  const gap = 10
-  const columns = 4
+  const gap = 14
+  const columns = 2
   const cardW = (frame.w - 40 - gap * (columns - 1)) / columns
-  const cardH = 86
+  const cardH = 78
   cards.forEach((change, index) => {
     const col = index % columns
     const row = Math.floor(index / columns)
     const x = frame.x + 20 + col * (cardW + gap)
-    const y = frame.y + 54 + row * (cardH + 12)
+    const y = frame.y + 50 + row * (cardH + 8)
     drawProductCard(ctx, { x, y, w: cardW, h: cardH }, change)
   })
 
-  setFont(ctx, 14, 700)
+  setFont(ctx, 15, 700)
   ctx.fillStyle = palette.muted
   ctx.fillText('Acht Kernkategorien mit Alt-Beitrag, Neu-Beitrag und Wirkung aus Mandantensicht', frame.x + 20, frame.y + 31)
 }
@@ -272,50 +272,56 @@ function drawProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: Prod
 function drawCompactProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: ProductChange) {
   const tone = toneForEffect(change.effectType)
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 12, tone.bg, tone.border)
-  drawProductIcon(ctx, rect.x + 25, rect.y + 22, change.title, tone.accent, 14)
+  drawProductIcon(ctx, rect.x + 28, rect.y + 25, change.title, tone.accent, 15)
 
-  setFont(ctx, 10, 900)
+  setFont(ctx, 13, 900)
   ctx.fillStyle = palette.ink
-  drawWrappedText(ctx, change.title, rect.x + 48, rect.y + 16, rect.w - 62, { lineHeight: 12, maxLines: 2 })
+  drawWrappedText(ctx, change.title, rect.x + 54, rect.y + 18, rect.w - 210, { lineHeight: 13, maxLines: 2 })
 
-  setFont(ctx, 9, 900)
-  ctx.fillStyle = palette.muted
-  ctx.fillText('ALT', rect.x + 14, rect.y + 55)
-  setFont(ctx, 10, 800)
-  ctx.fillStyle = change.oldMonthly === undefined ? palette.red : palette.ink
-  drawSingleLine(ctx, change.oldMonthlyLabel, rect.x + 40, rect.y + 55, 86)
-
-  setFont(ctx, 9, 900)
-  ctx.fillStyle = palette.muted
-  ctx.fillText('NEU', rect.x + 132, rect.y + 55)
-  setFont(ctx, 10, 800)
-  ctx.fillStyle = change.newMonthly === undefined ? palette.red : palette.ink
-  drawSingleLine(ctx, change.newMonthlyLabel, rect.x + 160, rect.y + 55, rect.w - 172)
-
-  roundedRect(ctx, rect.x + 12, rect.y + 64, rect.w - 24, 18, 9, tone.badge, tone.border)
-  setFont(ctx, 10, 900)
+  roundedRect(ctx, rect.x + rect.w - 145, rect.y + 12, 132, 24, 12, tone.badge, tone.border)
+  setFont(ctx, 12, 900)
   ctx.fillStyle = tone.accent
-  drawSingleLine(ctx, change.effectLabel, rect.x + rect.w / 2, rect.y + 77, rect.w - 34, 'center')
+  drawSingleLine(ctx, change.effectLabel, rect.x + rect.w - 79, rect.y + 28, 118, 'center')
+
+  setFont(ctx, 11, 900)
+  ctx.fillStyle = palette.muted
+  ctx.fillText('ALT', rect.x + 54, rect.y + 50)
+  setFont(ctx, 12, 900)
+  ctx.fillStyle = change.oldMonthly === undefined ? palette.red : palette.ink
+  drawSingleLine(ctx, change.oldProduct, rect.x + 86, rect.y + 50, 150)
+  setFont(ctx, 13, 900)
+  ctx.fillStyle = change.oldMonthly === undefined ? palette.red : palette.muted
+  drawSingleLine(ctx, change.oldMonthlyLabel, rect.x + 238, rect.y + 50, 110)
+
+  setFont(ctx, 11, 900)
+  ctx.fillStyle = palette.muted
+  ctx.fillText('NEU', rect.x + 54, rect.y + 68)
+  setFont(ctx, 12, 900)
+  ctx.fillStyle = change.newMonthly === undefined ? palette.red : palette.ink
+  drawSingleLine(ctx, change.newProduct, rect.x + 86, rect.y + 68, 150)
+  setFont(ctx, 13, 900)
+  ctx.fillStyle = change.newMonthly === undefined ? palette.red : palette.muted
+  drawSingleLine(ctx, change.newMonthlyLabel, rect.x + 238, rect.y + 68, 110)
 }
 
 function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData) {
-  drawSectionTitle(ctx, '5', `Reine Beitragsersparnis bis ${data.targetAge}`, 70, 972, palette.green)
+  drawSectionTitle(ctx, '5', `Reine Beitragsersparnis bis ${data.targetAge}`, 70, 1084, palette.green)
 
-  const rect = { x: 70, y: 1002, w: 1100, h: 174 }
+  const rect = { x: 70, y: 1114, w: 1100, h: 154 }
   const isPresent = data.longTermSaving.status === 'present'
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 20, isPresent ? palette.greenSoft : palette.amberSoft, isPresent ? '#b7dec9' : '#ead49a')
 
   ctx.fillStyle = isPresent ? palette.green : palette.amber
   roundPath(ctx, rect.x, rect.y, 122, rect.h, 20)
   ctx.fill()
-  drawSavingsIcon(ctx, rect.x + 61, rect.y + 88, palette.paper)
+  drawSavingsIcon(ctx, rect.x + 61, rect.y + 78, palette.paper)
 
   setFont(ctx, 18, 900)
   ctx.fillStyle = palette.muted
-  ctx.fillText('GESAMTVORTEIL', rect.x + 156, rect.y + 52)
+  ctx.fillText('GESAMTVORTEIL', rect.x + 156, rect.y + 44)
   ctx.fillStyle = isPresent ? palette.green : palette.amber
-  drawFittedSingleLine(ctx, data.longTermSaving.label, rect.x + 156, rect.y + 111, 386, {
-    maxSize: isPresent ? 50 : 32,
+  drawFittedSingleLine(ctx, data.longTermSaving.label, rect.x + 156, rect.y + 94, 386, {
+    maxSize: isPresent ? 44 : 30,
     minSize: 22,
     weight: 900,
   })
@@ -323,55 +329,55 @@ function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData) {
   setFont(ctx, 14, 800)
   ctx.fillStyle = palette.muted
   if (isPresent) {
-    drawWrappedText(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 136, 380, { lineHeight: 17, maxLines: 2 })
+    drawWrappedText(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 118, 380, { lineHeight: 16, maxLines: 2 })
   } else {
-    drawWrappedText(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 134, 380, { lineHeight: 18, maxLines: 2 })
+    drawWrappedText(ctx, data.longTermSaving.note, rect.x + 158, rect.y + 116, 380, { lineHeight: 18, maxLines: 2 })
   }
 
-  setFont(ctx, 18, 600)
+  setFont(ctx, 17, 600)
   ctx.fillStyle = palette.ink
   drawWrappedText(
     ctx,
     'Diese Ersparnis bezieht sich auf die Optimierung der bisherigen Bausteine vor Einrechnung neuer zusätzlicher Bausteine.',
     rect.x + 590,
-    rect.y + 64,
+    rect.y + 56,
     470,
-    { lineHeight: 25, maxLines: 3 },
+    { lineHeight: 23, maxLines: 3 },
   )
 }
 
 function drawOptionalPotential(ctx: CanvasRenderingContext2D, text: string) {
-  drawSectionTitle(ctx, '6', 'Optionales Zusatzpotenzial', 70, 1223, palette.gold)
+  drawSectionTitle(ctx, '6', 'Optionales Zusatzpotenzial', 70, 1305, palette.gold)
 
-  const rect = { x: 70, y: 1253, w: 1100, h: 120 }
+  const rect = { x: 70, y: 1331, w: 1100, h: 104 }
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, palette.goldSoft, '#e5cf95')
-  drawSmallCircleIcon(ctx, rect.x + 48, rect.y + 60, palette.gold)
+  drawSmallCircleIcon(ctx, rect.x + 48, rect.y + 52, palette.gold)
 
-  setFont(ctx, 19, 700)
+  setFont(ctx, 17, 700)
   ctx.fillStyle = palette.ink
-  drawWrappedText(ctx, text, rect.x + 92, rect.y + 47, rect.w - 124, { lineHeight: 25, maxLines: 3 })
+  drawWrappedText(ctx, text, rect.x + 92, rect.y + 38, rect.w - 124, { lineHeight: 22, maxLines: 3 })
 }
 
 function drawConclusion(ctx: CanvasRenderingContext2D, data: OverviewData) {
-  drawSectionTitle(ctx, '7', 'Fazit', 70, 1422, palette.navy)
+  drawSectionTitle(ctx, '7', 'Fazit', 70, 1470, palette.navy)
 
-  const rect = { x: 70, y: 1452, w: 1100, h: 126 }
+  const rect = { x: 70, y: 1496, w: 1100, h: 104 }
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, palette.paper, palette.line)
   ctx.fillStyle = palette.navy
   roundPath(ctx, rect.x, rect.y, 126, rect.h, 18)
   ctx.fill()
-  drawCheckIcon(ctx, rect.x + 63, rect.y + 64, palette.paper)
+  drawCheckIcon(ctx, rect.x + 63, rect.y + 53, palette.paper)
 
-  setFont(ctx, 18, 700)
+  setFont(ctx, 17, 700)
   ctx.fillStyle = palette.ink
-  drawWrappedText(ctx, data.conclusion, rect.x + 158, rect.y + 45, rect.w - 190, { lineHeight: 25, maxLines: 3 })
+  drawWrappedText(ctx, data.conclusion, rect.x + 158, rect.y + 35, rect.w - 190, { lineHeight: 22, maxLines: 3 })
 }
 
 function drawNotices(ctx: CanvasRenderingContext2D, notices: string[]) {
-  drawSectionTitle(ctx, '8', 'Modellannahmen & Hinweise', 70, 1624, palette.navy)
+  drawSectionTitle(ctx, '8', 'Modellannahmen & Hinweise', 70, 1633, palette.navy)
 
   const startX = 70
-  const startY = 1651
+  const startY = 1658
   const itemW = 270
   setFont(ctx, 12, 700)
   notices.slice(0, 8).forEach((notice, index) => {
