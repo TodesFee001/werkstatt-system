@@ -2,6 +2,7 @@
 
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { extractBasisdatenFromPdf } from '@/lib/basisdaten-pdf'
+import { extractFinanzgutachtenFromPdf, type FinanzgutachtenProductImport } from '@/lib/finanzgutachten-pdf'
 import { drawPraeLuxOverview } from '@/lib/praelux-canvas'
 import {
   buildOverviewFromForm,
@@ -21,7 +22,7 @@ type ScalarField = {
   [Key in keyof PraeLuxFormData]: PraeLuxFormData[Key] extends string ? Key : never
 }[keyof PraeLuxFormData]
 
-type BasisdatenImportState = {
+type PdfImportState = {
   status: 'idle' | 'loading' | 'success' | 'error'
   message: string
 }
@@ -73,9 +74,13 @@ export default function PraeLuxTool() {
   const [stepIndex, setStepIndex] = useState(0)
   const [isDraftReady, setIsDraftReady] = useState(false)
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
-  const [basisdatenImport, setBasisdatenImport] = useState<BasisdatenImportState>({
+  const [basisdatenImport, setBasisdatenImport] = useState<PdfImportState>({
     status: 'idle',
     message: 'PDF auswählen und Mandantendaten übernehmen',
+  })
+  const [finanzgutachtenImport, setFinanzgutachtenImport] = useState<PdfImportState>({
+    status: 'idle',
+    message: 'PDF auswählen und Bestand, Konzept sowie Kategorien übernehmen',
   })
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const data = useMemo(() => buildOverviewFromForm(form), [form])
@@ -242,6 +247,41 @@ export default function PraeLuxTool() {
     }
   }
 
+  async function handleFinanzgutachtenUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    if (!file) return
+
+    if (!file.name.toLocaleLowerCase('de-DE').endsWith('.pdf')) {
+      setFinanzgutachtenImport({ status: 'error', message: 'Bitte eine PDF-Datei auswählen' })
+      return
+    }
+
+    setFinanzgutachtenImport({ status: 'loading', message: 'PDF wird gelesen' })
+
+    try {
+      const result = await extractFinanzgutachtenFromPdf(file)
+      const importedCount = result.labels.length + result.products.length
+
+      if (importedCount === 0) {
+        setFinanzgutachtenImport({ status: 'error', message: 'Keine Bestandsdaten gefunden' })
+        return
+      }
+
+      setForm((current) => ({
+        ...current,
+        ...result.values,
+        productChanges: mergeFinanzgutachtenProducts(current.productChanges, result.products),
+      }))
+      setFinanzgutachtenImport({
+        status: 'success',
+        message: `${result.labels.length} Summen, ${result.products.length} Kategorien übernommen`,
+      })
+    } catch {
+      setFinanzgutachtenImport({ status: 'error', message: 'PDF konnte nicht gelesen werden' })
+    }
+  }
+
   function renderStep() {
     if (stepIndex === 0) {
       return (
@@ -323,6 +363,25 @@ export default function PraeLuxTool() {
     if (stepIndex === 1) {
       return (
         <>
+          <div className={`basisdaten-import ${finanzgutachtenImport.status}`}>
+            <div>
+              <strong>Finanzgutachten</strong>
+              <span>{finanzgutachtenImport.message}</span>
+            </div>
+            <label
+              className={`pdf-import-action secondary-action ${
+                finanzgutachtenImport.status === 'loading' ? 'disabled' : ''
+              }`}
+            >
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={handleFinanzgutachtenUpload}
+                disabled={finanzgutachtenImport.status === 'loading'}
+              />
+              {finanzgutachtenImport.status === 'loading' ? 'Wird gelesen' : 'PDF importieren'}
+            </label>
+          </div>
           <div className="concept-groups">
             <fieldset className="concept-group">
               <legend>
@@ -924,6 +983,32 @@ function migrateProductDrafts(draftProducts: unknown[], defaults: EditableProduc
     }))
 
   return [...mergedDefaults, ...customDrafts]
+}
+
+function mergeFinanzgutachtenProducts(
+  currentProducts: EditableProductChange[],
+  importedProducts: FinanzgutachtenProductImport[],
+) {
+  const importedByKey = new Map(importedProducts.map((product) => [normalizeProductDraftKey(product.categoryKey), product]))
+
+  return currentProducts.map((product) => {
+    const imported = importedByKey.get(normalizeProductDraftKey(product.id)) ?? importedByKey.get(normalizeProductDraftKey(product.title))
+    if (!imported) return product
+
+    const nextProduct: EditableProductChange = {
+      ...product,
+      oldProduct: imported.oldProduct ?? product.oldProduct,
+      oldMonthly: imported.oldMonthly ?? product.oldMonthly,
+      newProduct: imported.newProduct ?? product.newProduct,
+      newMonthly: imported.newMonthly ?? product.newMonthly,
+      monthlyEffect: '',
+    }
+
+    return {
+      ...nextProduct,
+      effectType: deriveProductEffect(nextProduct).effectType,
+    }
+  })
 }
 
 function isEditableProductDraft(value: unknown): value is Partial<EditableProductChange> {
