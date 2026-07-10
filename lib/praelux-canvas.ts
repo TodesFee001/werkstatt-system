@@ -36,6 +36,9 @@ type Rect = {
   h: number
 }
 
+type FactIconKind = 'calendar' | 'person' | 'coin' | 'trend' | 'horizon'
+type ProductIconKind = 'income' | 'liability' | 'accident' | 'health' | 'retirement' | 'home' | 'tooth' | 'legal'
+
 export function drawPraeLuxOverview(canvas: HTMLCanvasElement, data: OverviewData, scale = 2) {
   canvas.width = A4_WIDTH * scale
   canvas.height = A4_HEIGHT * scale
@@ -432,6 +435,11 @@ function toneForEffect(effectType: ProductEffectType) {
 
 function drawFactIcon(ctx: CanvasRenderingContext2D, x: number, y: number, index: number, status: string) {
   const color = status === 'present' ? palette.gold : status === 'check' ? palette.amber : palette.red
+  if (index >= 0) {
+    drawIconCircle(ctx, x, y, 15, color)
+    drawFactSymbol(ctx, x, y, factIconKind(index), color, 15)
+    return
+  }
   ctx.strokeStyle = color
   ctx.lineWidth = 2
   ctx.beginPath()
@@ -443,6 +451,11 @@ function drawFactIcon(ctx: CanvasRenderingContext2D, x: number, y: number, index
 }
 
 function drawProductIcon(ctx: CanvasRenderingContext2D, x: number, y: number, title: string, color: string, radius = 19) {
+  if (radius > 0) {
+    drawIconCircle(ctx, x, y, radius, color)
+    drawProductSymbol(ctx, x, y, productIconKind(title), color, radius)
+    return
+  }
   ctx.strokeStyle = color
   ctx.fillStyle = palette.paper
   ctx.lineWidth = 2.4
@@ -502,6 +515,237 @@ function drawMiniNoticeIcon(ctx: CanvasRenderingContext2D, x: number, y: number)
   ctx.beginPath()
   ctx.arc(x, y, 5, 0, Math.PI * 2)
   ctx.fill()
+}
+
+function drawIconCircle(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, color: string) {
+  ctx.strokeStyle = color
+  ctx.fillStyle = palette.paper
+  ctx.lineWidth = Math.max(1.8, radius * 0.13)
+  ctx.beginPath()
+  ctx.arc(x, y, radius, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+}
+
+function drawFactSymbol(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  kind: FactIconKind,
+  color: string,
+  radius: number,
+) {
+  beginIconStroke(ctx, color, radius)
+
+  if (kind === 'calendar') {
+    ctx.roundRect(x - radius * 0.48, y - radius * 0.36, radius * 0.96, radius * 0.76, radius * 0.12)
+    ctx.moveTo(x - radius * 0.48, y - radius * 0.12)
+    ctx.lineTo(x + radius * 0.48, y - radius * 0.12)
+    ctx.moveTo(x - radius * 0.22, y - radius * 0.5)
+    ctx.lineTo(x - radius * 0.22, y - radius * 0.24)
+    ctx.moveTo(x + radius * 0.22, y - radius * 0.5)
+    ctx.lineTo(x + radius * 0.22, y - radius * 0.24)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  if (kind === 'person') {
+    ctx.arc(x, y - radius * 0.22, radius * 0.2, 0, Math.PI * 2)
+    ctx.moveTo(x - radius * 0.48, y + radius * 0.5)
+    ctx.quadraticCurveTo(x, y + radius * 0.1, x + radius * 0.48, y + radius * 0.5)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  if (kind === 'coin') {
+    ctx.ellipse(x, y, radius * 0.42, radius * 0.52, 0, 0, Math.PI * 2)
+    ctx.moveTo(x - radius * 0.18, y - radius * 0.12)
+    ctx.lineTo(x + radius * 0.2, y - radius * 0.12)
+    ctx.moveTo(x - radius * 0.18, y + radius * 0.12)
+    ctx.lineTo(x + radius * 0.2, y + radius * 0.12)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  if (kind === 'trend') {
+    ctx.moveTo(x - radius * 0.5, y + radius * 0.3)
+    ctx.lineTo(x - radius * 0.15, y + radius * 0.02)
+    ctx.lineTo(x + radius * 0.08, y + radius * 0.14)
+    ctx.lineTo(x + radius * 0.48, y - radius * 0.34)
+    ctx.moveTo(x + radius * 0.2, y - radius * 0.34)
+    ctx.lineTo(x + radius * 0.48, y - radius * 0.34)
+    ctx.lineTo(x + radius * 0.48, y - radius * 0.06)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  ctx.arc(x, y, radius * 0.43, -Math.PI * 0.95, Math.PI * 0.85)
+  ctx.moveTo(x, y)
+  ctx.lineTo(x, y - radius * 0.28)
+  ctx.moveTo(x, y)
+  ctx.lineTo(x + radius * 0.24, y + radius * 0.15)
+  ctx.moveTo(x + radius * 0.18, y + radius * 0.46)
+  ctx.lineTo(x + radius * 0.52, y + radius * 0.46)
+  ctx.stroke()
+  endIconStroke(ctx)
+}
+
+function drawProductSymbol(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  kind: ProductIconKind,
+  color: string,
+  radius: number,
+) {
+  beginIconStroke(ctx, color, radius)
+
+  if (kind === 'income') {
+    drawShieldPath(ctx, x, y - radius * 0.02, radius * 0.62)
+    ctx.moveTo(x, y - radius * 0.1)
+    ctx.arc(x, y - radius * 0.14, radius * 0.14, 0, Math.PI * 2)
+    ctx.moveTo(x - radius * 0.24, y + radius * 0.28)
+    ctx.quadraticCurveTo(x, y + radius * 0.08, x + radius * 0.24, y + radius * 0.28)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  if (kind === 'liability') {
+    drawShieldPath(ctx, x, y, radius * 0.66)
+    ctx.moveTo(x - radius * 0.22, y + radius * 0.04)
+    ctx.lineTo(x - radius * 0.04, y + radius * 0.22)
+    ctx.lineTo(x + radius * 0.28, y - radius * 0.22)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  if (kind === 'accident') {
+    ctx.roundRect(x - radius * 0.14, y - radius * 0.48, radius * 0.28, radius * 0.96, radius * 0.08)
+    ctx.roundRect(x - radius * 0.48, y - radius * 0.14, radius * 0.96, radius * 0.28, radius * 0.08)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  if (kind === 'health') {
+    ctx.moveTo(x - radius * 0.5, y + radius * 0.02)
+    ctx.lineTo(x - radius * 0.25, y + radius * 0.02)
+    ctx.lineTo(x - radius * 0.1, y - radius * 0.25)
+    ctx.lineTo(x + radius * 0.08, y + radius * 0.28)
+    ctx.lineTo(x + radius * 0.22, y - radius * 0.04)
+    ctx.lineTo(x + radius * 0.5, y - radius * 0.04)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  if (kind === 'retirement') {
+    ctx.moveTo(x, y + radius * 0.48)
+    ctx.lineTo(x, y - radius * 0.32)
+    ctx.moveTo(x, y - radius * 0.02)
+    ctx.quadraticCurveTo(x - radius * 0.46, y - radius * 0.32, x - radius * 0.48, y - radius * 0.62)
+    ctx.quadraticCurveTo(x - radius * 0.1, y - radius * 0.58, x, y - radius * 0.12)
+    ctx.moveTo(x, y - radius * 0.02)
+    ctx.quadraticCurveTo(x + radius * 0.46, y - radius * 0.32, x + radius * 0.48, y - radius * 0.62)
+    ctx.quadraticCurveTo(x + radius * 0.1, y - radius * 0.58, x, y - radius * 0.12)
+    ctx.moveTo(x - radius * 0.4, y + radius * 0.5)
+    ctx.lineTo(x + radius * 0.4, y + radius * 0.5)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  if (kind === 'home') {
+    ctx.moveTo(x - radius * 0.55, y - radius * 0.02)
+    ctx.lineTo(x, y - radius * 0.5)
+    ctx.lineTo(x + radius * 0.55, y - radius * 0.02)
+    ctx.moveTo(x - radius * 0.38, y)
+    ctx.lineTo(x - radius * 0.38, y + radius * 0.5)
+    ctx.lineTo(x + radius * 0.38, y + radius * 0.5)
+    ctx.lineTo(x + radius * 0.38, y)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  if (kind === 'tooth') {
+    ctx.moveTo(x - radius * 0.34, y - radius * 0.36)
+    ctx.bezierCurveTo(x - radius * 0.58, y - radius * 0.12, x - radius * 0.32, y + radius * 0.58, x - radius * 0.05, y + radius * 0.32)
+    ctx.bezierCurveTo(x + radius * 0.02, y + radius * 0.22, x - radius * 0.02, y + radius * 0.1, x, y + radius * 0.02)
+    ctx.bezierCurveTo(x + radius * 0.02, y + radius * 0.1, x - radius * 0.02, y + radius * 0.22, x + radius * 0.05, y + radius * 0.32)
+    ctx.bezierCurveTo(x + radius * 0.32, y + radius * 0.58, x + radius * 0.58, y - radius * 0.12, x + radius * 0.34, y - radius * 0.36)
+    ctx.bezierCurveTo(x + radius * 0.18, y - radius * 0.5, x + radius * 0.1, y - radius * 0.34, x, y - radius * 0.32)
+    ctx.bezierCurveTo(x - radius * 0.1, y - radius * 0.34, x - radius * 0.18, y - radius * 0.5, x - radius * 0.34, y - radius * 0.36)
+    ctx.stroke()
+    endIconStroke(ctx)
+    return
+  }
+
+  ctx.moveTo(x, y - radius * 0.52)
+  ctx.lineTo(x, y + radius * 0.46)
+  ctx.moveTo(x - radius * 0.38, y + radius * 0.46)
+  ctx.lineTo(x + radius * 0.38, y + radius * 0.46)
+  ctx.moveTo(x - radius * 0.5, y - radius * 0.18)
+  ctx.lineTo(x + radius * 0.5, y - radius * 0.18)
+  ctx.moveTo(x - radius * 0.34, y - radius * 0.18)
+  ctx.lineTo(x - radius * 0.52, y + radius * 0.16)
+  ctx.lineTo(x - radius * 0.16, y + radius * 0.16)
+  ctx.closePath()
+  ctx.moveTo(x + radius * 0.34, y - radius * 0.18)
+  ctx.lineTo(x + radius * 0.16, y + radius * 0.16)
+  ctx.lineTo(x + radius * 0.52, y + radius * 0.16)
+  ctx.closePath()
+  ctx.stroke()
+  endIconStroke(ctx)
+}
+
+function beginIconStroke(ctx: CanvasRenderingContext2D, color: string, radius: number) {
+  ctx.save()
+  ctx.strokeStyle = color
+  ctx.lineWidth = Math.max(1.6, radius * 0.12)
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.beginPath()
+}
+
+function endIconStroke(ctx: CanvasRenderingContext2D) {
+  ctx.restore()
+}
+
+function drawShieldPath(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.moveTo(x, y - size * 0.62)
+  ctx.quadraticCurveTo(x - size * 0.5, y - size * 0.42, x - size * 0.48, y - size * 0.08)
+  ctx.quadraticCurveTo(x - size * 0.42, y + size * 0.36, x, y + size * 0.66)
+  ctx.quadraticCurveTo(x + size * 0.42, y + size * 0.36, x + size * 0.48, y - size * 0.08)
+  ctx.quadraticCurveTo(x + size * 0.5, y - size * 0.42, x, y - size * 0.62)
+}
+
+function factIconKind(index: number): FactIconKind {
+  return (['calendar', 'person', 'coin', 'trend', 'horizon'] as const)[index] ?? 'calendar'
+}
+
+function productIconKind(title: string): ProductIconKind {
+  const normalized = title
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ÃŸ/g, 'ss')
+    .toLocaleLowerCase('de-DE')
+
+  if (normalized.includes('berufsun')) return 'income'
+  if (normalized.includes('haftpflicht')) return 'liability'
+  if (normalized.includes('unfall')) return 'accident'
+  if (normalized.includes('kranken') || normalized.includes('pflege') || normalized.includes('krankenkasse')) return 'health'
+  if (normalized.includes('altersvorsorge')) return 'retirement'
+  if (normalized.includes('hausrat')) return 'home'
+  if (normalized.includes('zahn')) return 'tooth'
+  if (normalized.includes('rechtsschutz')) return 'legal'
+  return 'liability'
 }
 
 function iconInitial(title: string) {
