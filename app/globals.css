@@ -319,6 +319,10 @@ textarea:focus {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.field-grid.product-fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .field {
   min-width: 0;
   display: grid;
@@ -419,6 +423,71 @@ textarea:focus {
 .product-editor-head input {
   min-height: 38px;
   font-weight: 900;
+}
+
+.product-effect {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px 12px;
+}
+
+.product-effect span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.product-effect strong {
+  color: var(--ink);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.product-effect.saving {
+  background: #e8f5ed;
+  border-color: rgba(23, 118, 77, 0.28);
+}
+
+.product-effect.saving strong {
+  color: var(--green);
+}
+
+.product-effect.extra,
+.product-effect.new {
+  background: #fff3d5;
+  border-color: #ead49a;
+}
+
+.product-effect.extra strong,
+.product-effect.new strong {
+  color: #9a6819;
+}
+
+.product-effect.neutral {
+  background: #eef7f7;
+  border-color: rgba(36, 116, 119, 0.28);
+}
+
+.product-effect.neutral strong {
+  color: var(--teal);
+}
+
+.product-effect.missing {
+  background: #f9e5e5;
+  border-color: #edc0c0;
+}
+
+.product-effect.missing strong {
+  color: var(--danger);
 }
 
 .add-action {
@@ -552,7 +621,7 @@ textarea:focus {
 }
 
 .export-grid .readout-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 0;
 }
 
@@ -619,6 +688,7 @@ canvas {
 
   .field-grid,
   .field-grid.compact,
+  .field-grid.product-fields,
   .readout-grid {
     grid-template-columns: 1fr;
   }

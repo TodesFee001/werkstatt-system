@@ -219,7 +219,7 @@ function drawChanges(ctx: CanvasRenderingContext2D, changes: ProductChange[]) {
 
   setFont(ctx, 14, 700)
   ctx.fillStyle = palette.muted
-  ctx.fillText('Alt-Produkt, Neu-Produkt und Wirkung aus Mandantensicht', frame.x + 20, frame.y + 31)
+  ctx.fillText('Alt-Produkt, Alt-Beitrag, Neu-Produkt, Neu-Beitrag und Wirkung aus Mandantensicht', frame.x + 20, frame.y + 31)
 }
 
 function drawProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: ProductChange) {
@@ -229,26 +229,32 @@ function drawProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: Prod
 
   setFont(ctx, 14, 900)
   ctx.fillStyle = palette.ink
-  drawSingleLine(ctx, change.title, rect.x + 12, rect.y + 62, rect.w - 24, 'center')
+  drawSingleLine(ctx, change.title, rect.x + rect.w / 2, rect.y + 62, rect.w - 24, 'center')
 
   setFont(ctx, 11, 900)
   ctx.fillStyle = palette.muted
-  ctx.fillText('ALT', rect.x + 14, rect.y + 91)
-  setFont(ctx, 13, 700)
+  ctx.fillText('ALT', rect.x + 14, rect.y + 86)
+  setFont(ctx, 12, 700)
   ctx.fillStyle = palette.ink
-  drawSingleLine(ctx, change.oldProduct, rect.x + 56, rect.y + 91, rect.w - 70)
+  drawSingleLine(ctx, change.oldProduct, rect.x + 54, rect.y + 86, rect.w - 66)
+  setFont(ctx, 11, 800)
+  ctx.fillStyle = change.oldMonthly === undefined ? palette.red : palette.muted
+  drawSingleLine(ctx, change.oldMonthlyLabel, rect.x + 54, rect.y + 103, rect.w - 66)
 
   setFont(ctx, 11, 900)
   ctx.fillStyle = palette.muted
-  ctx.fillText('NEU', rect.x + 14, rect.y + 116)
-  setFont(ctx, 13, 700)
+  ctx.fillText('NEU', rect.x + 14, rect.y + 122)
+  setFont(ctx, 12, 700)
   ctx.fillStyle = palette.ink
-  drawSingleLine(ctx, change.newProduct, rect.x + 56, rect.y + 116, rect.w - 70)
+  drawSingleLine(ctx, change.newProduct, rect.x + 54, rect.y + 122, rect.w - 66)
+  setFont(ctx, 11, 800)
+  ctx.fillStyle = change.newMonthly === undefined ? palette.red : palette.muted
+  drawSingleLine(ctx, change.newMonthlyLabel, rect.x + 54, rect.y + 139, rect.w - 66)
 
-  roundedRect(ctx, rect.x + 12, rect.y + 136, rect.w - 24, 28, 14, tone.badge, tone.border)
-  setFont(ctx, 13, 900)
+  roundedRect(ctx, rect.x + 12, rect.y + 147, rect.w - 24, 24, 12, tone.badge, tone.border)
+  setFont(ctx, 12, 900)
   ctx.fillStyle = tone.accent
-  drawSingleLine(ctx, change.effectLabel, rect.x + rect.w / 2, rect.y + 155, rect.w - 36, 'center')
+  drawSingleLine(ctx, change.effectLabel, rect.x + rect.w / 2, rect.y + 164, rect.w - 36, 'center')
 }
 
 function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData) {

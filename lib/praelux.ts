@@ -20,9 +20,14 @@ export type ProductChange = {
   title: string
   oldProduct: string
   newProduct: string
+  oldMonthly?: number
+  newMonthly?: number
+  oldMonthlyLabel: string
+  newMonthlyLabel: string
   effect?: number
   effectLabel: string
   effectType: ProductEffectType
+  effectSource: 'calculated' | 'manual' | 'missing'
 }
 
 export type EditableProductChange = {
@@ -30,6 +35,8 @@ export type EditableProductChange = {
   title: string
   oldProduct: string
   newProduct: string
+  oldMonthly: string
+  newMonthly: string
   monthlyEffect: string
   effectType: ProductEffectType
 }
@@ -90,6 +97,7 @@ export type PraeLuxFormData = {
   pureSavingUntilTarget: string
   optionalMonthlyInvestment: string
   optionalPotentialUntilTarget: string
+  generalInterestRate: string
   conclusionNote: string
 }
 
@@ -108,6 +116,7 @@ export type PraeLuxCalculatedValues = {
   pureSavingUntilTarget?: number
   optionalMonthlyInvestment?: number
   optionalPotentialUntilTarget?: number
+  generalInterestRate?: number
 }
 
 const MISSING = 'fehlt'
@@ -121,6 +130,8 @@ const DEFAULT_PRODUCT_CHANGES: EditableProductChange[] = [
     title: 'Haftpflicht',
     oldProduct: '',
     newProduct: '',
+    oldMonthly: '',
+    newMonthly: '',
     monthlyEffect: '',
     effectType: 'missing',
   },
@@ -129,6 +140,8 @@ const DEFAULT_PRODUCT_CHANGES: EditableProductChange[] = [
     title: 'Krankenkasse',
     oldProduct: '',
     newProduct: '',
+    oldMonthly: '',
+    newMonthly: '',
     monthlyEffect: '',
     effectType: 'missing',
   },
@@ -137,6 +150,8 @@ const DEFAULT_PRODUCT_CHANGES: EditableProductChange[] = [
     title: 'Zahnzusatz',
     oldProduct: '',
     newProduct: '',
+    oldMonthly: '',
+    newMonthly: '',
     monthlyEffect: '',
     effectType: 'missing',
   },
@@ -145,6 +160,8 @@ const DEFAULT_PRODUCT_CHANGES: EditableProductChange[] = [
     title: 'Rechtsschutz',
     oldProduct: '',
     newProduct: '',
+    oldMonthly: '',
+    newMonthly: '',
     monthlyEffect: '',
     effectType: 'missing',
   },
@@ -153,6 +170,8 @@ const DEFAULT_PRODUCT_CHANGES: EditableProductChange[] = [
     title: 'Altersvorsorge',
     oldProduct: '',
     newProduct: '',
+    oldMonthly: '',
+    newMonthly: '',
     monthlyEffect: '',
     effectType: 'missing',
   },
@@ -177,6 +196,7 @@ export function createEmptyPraeLuxForm(): PraeLuxFormData {
     pureSavingUntilTarget: '',
     optionalMonthlyInvestment: '',
     optionalPotentialUntilTarget: '',
+    generalInterestRate: '',
     conclusionNote: '',
   }
 }
@@ -208,11 +228,12 @@ export function calculatePraeLuxForm(form: PraeLuxFormData): PraeLuxCalculatedVa
       : undefined)
 
   const optionalMonthlyInvestment = parseMoneyInput(form.optionalMonthlyInvestment)
+  const generalInterestRate = parsePercentInput(form.generalInterestRate)
   const explicitOptionalPotential = parseMoneyInput(form.optionalPotentialUntilTarget)
   const optionalPotentialUntilTarget =
     explicitOptionalPotential ??
     (optionalMonthlyInvestment !== undefined && remainingYears !== undefined
-      ? optionalMonthlyInvestment * 12 * remainingYears
+      ? calculateMonthlySavingsPotential(optionalMonthlyInvestment, remainingYears, generalInterestRate)
       : undefined)
 
   return {
@@ -230,6 +251,7 @@ export function calculatePraeLuxForm(form: PraeLuxFormData): PraeLuxCalculatedVa
     pureSavingUntilTarget,
     optionalMonthlyInvestment,
     optionalPotentialUntilTarget,
+    generalInterestRate,
   }
 }
 
@@ -302,7 +324,7 @@ export function buildOverviewFromForm(form: PraeLuxFormData): OverviewData {
     notices: [
       `Laufzeit modellhaft bis ${calculated.targetAge}`,
       'Beitragsersparnis ohne Zinseszins gerechnet',
-      'Optionale Anlage ohne Renditeannahme',
+      'Optionaler Zinssatz ist modellhaft',
       'Neue Bausteine nicht in reiner Beitragsersparnis enthalten',
       'Fehlende Werte bleiben markiert',
       'Keine Garantie oder Renditezusage',
@@ -351,6 +373,16 @@ export function parseMoneyInput(value: string | undefined) {
   const number = Number.parseFloat(cleaned)
   if (!Number.isFinite(number)) return undefined
   return isNegative ? -Math.abs(number) : Math.abs(number)
+}
+
+export function parsePercentInput(value: string | undefined) {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const cleaned = trimmed.replace(/[^\d,.-]/g, '').replace(',', '.')
+  const number = Number.parseFloat(cleaned)
+  if (!Number.isFinite(number)) return undefined
+  return number
 }
 
 export function slugifyName(value: string) {
@@ -440,25 +472,75 @@ function buildImpact(monthly: number | undefined, yearly: number | undefined): M
 
 function buildProductChanges(productChanges: EditableProductChange[]) {
   return productChanges.map((change, index) => {
-    const effect = parseMoneyInput(change.monthlyEffect)
-    const effectType = hasProductContent(change) ? change.effectType : 'missing'
+    const derived = deriveProductEffect(change)
     return {
       title: cleanText(change.title) || `Baustein ${index + 1}`,
       oldProduct: cleanText(change.oldProduct) || NOT_GIVEN,
       newProduct: cleanText(change.newProduct) || CHECK,
-      effect,
-      effectLabel: buildEffectLabel(effect, effectType),
-      effectType,
+      oldMonthly: derived.oldMonthly,
+      newMonthly: derived.newMonthly,
+      oldMonthlyLabel: derived.oldMonthlyLabel,
+      newMonthlyLabel: derived.newMonthlyLabel,
+      effect: derived.effect,
+      effectLabel: derived.effectLabel,
+      effectType: derived.effectType,
+      effectSource: derived.effectSource,
     } satisfies ProductChange
   })
 }
 
-function buildEffectLabel(value: number | undefined, type: ProductEffectType) {
+export function deriveProductEffect(change: EditableProductChange) {
+  const oldMonthly = parseMoneyInput(change.oldMonthly)
+  const newMonthly = parseMoneyInput(change.newMonthly)
+  const hasCalculatedPair = oldMonthly !== undefined && newMonthly !== undefined
+
+  if (hasCalculatedPair) {
+    const effect = oldMonthly - newMonthly
+    const effectType: ProductEffectType = Math.abs(effect) < 0.005 ? 'neutral' : effect > 0 ? 'saving' : 'extra'
+    return {
+      oldMonthly,
+      newMonthly,
+      oldMonthlyLabel: `${formatCurrency(oldMonthly)} mtl.`,
+      newMonthlyLabel: `${formatCurrency(newMonthly)} mtl.`,
+      effect,
+      effectLabel: buildProductEffectLabel(effect, effectType),
+      effectType,
+      effectSource: 'calculated' as const,
+    }
+  }
+
+  const manualEffect = parseMoneyInput(change.monthlyEffect)
+  const effectType: ProductEffectType = hasProductContent(change)
+    ? change.effectType !== 'missing'
+      ? change.effectType
+      : inferProductEffectType(manualEffect)
+    : 'missing'
+
+  return {
+    oldMonthly,
+    newMonthly,
+    oldMonthlyLabel: oldMonthly !== undefined ? `${formatCurrency(oldMonthly)} mtl.` : MISSING,
+    newMonthlyLabel: newMonthly !== undefined ? `${formatCurrency(newMonthly)} mtl.` : MISSING,
+    effect: manualEffect,
+    effectLabel: buildProductEffectLabel(manualEffect, effectType),
+    effectType,
+    effectSource: manualEffect !== undefined || effectType !== 'missing' ? ('manual' as const) : ('missing' as const),
+  }
+}
+
+function inferProductEffectType(value: number | undefined): ProductEffectType {
+  if (value === undefined) return 'missing'
+  if (Math.abs(value) < 0.005) return 'neutral'
+  return value > 0 ? 'saving' : 'extra'
+}
+
+function buildProductEffectLabel(value: number | undefined, type: ProductEffectType) {
   if (type === 'missing') return CHECK
   if (value === undefined) return CHECK
+  if (type === 'neutral') return 'neutral'
   if (type === 'saving') return `${formatCurrency(value, { plus: true })} mtl.`
   if (type === 'new') return `neuer Baustein: ${formatCurrency(value)} mtl.`
-  if (type === 'extra') return `Mehrbeitrag: ${formatCurrency(Math.abs(value))} mtl.`
+  if (type === 'extra') return `Mehr: ${formatCurrency(Math.abs(value))} mtl.`
   return `${formatCurrency(value)} mtl.`
 }
 
@@ -501,9 +583,13 @@ function buildOptionalPotential(form: PraeLuxFormData, calculated: PraeLuxCalcul
   }
 
   if (calculated.optionalPotentialUntilTarget !== undefined && calculated.optionalMonthlyInvestment !== undefined) {
+    const ratePart =
+      calculated.generalInterestRate !== undefined && calculated.generalInterestRate > 0
+        ? ` bei ${formatPercent(calculated.generalInterestRate)} allgemeinem Zinssatz p.a.`
+        : ' ohne Renditeannahme'
     return `Wenn optional ${formatCurrency(
       calculated.optionalMonthlyInvestment,
-    )} mtl. zusätzlich eingesetzt werden, ergibt das ohne Renditeannahme ${formatCurrency(
+    )} mtl. zusätzlich eingesetzt werden, ergibt das${ratePart} ${formatCurrency(
       calculated.optionalPotentialUntilTarget,
       { plus: true },
     )} bis ${calculated.targetAge}.`
@@ -550,11 +636,28 @@ function buildHorizonLabel(calculated: PraeLuxCalculatedValues) {
 
 function hasProductContent(change: EditableProductChange) {
   return Boolean(
-    cleanText(change.oldProduct) ||
+      cleanText(change.oldProduct) ||
       cleanText(change.newProduct) ||
+      cleanText(change.oldMonthly) ||
+      cleanText(change.newMonthly) ||
       cleanText(change.monthlyEffect) ||
       change.effectType !== 'missing',
   )
+}
+
+function calculateMonthlySavingsPotential(monthlyAmount: number, years: number, annualRate: number | undefined) {
+  const months = Math.max(0, Math.round(years * 12))
+  if (months === 0) return 0
+  if (annualRate === undefined || annualRate <= 0) return monthlyAmount * months
+  const monthlyRate = annualRate / 100 / 12
+  return monthlyAmount * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate)
+}
+
+function formatPercent(value: number) {
+  return `${new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)} %`
 }
 
 function hasValue(value: string) {

@@ -6,6 +6,7 @@ import {
   buildOverviewFromForm,
   calculatePraeLuxForm,
   createEmptyPraeLuxForm,
+  deriveProductEffect,
   formatCurrency,
   formatOptionalCurrency,
   slugifyName,
@@ -84,6 +85,8 @@ export default function PraeLuxTool() {
           title: 'Weiterer Baustein',
           oldProduct: '',
           newProduct: '',
+          oldMonthly: '',
+          newMonthly: '',
           monthlyEffect: '',
           effectType: 'missing',
         },
@@ -231,58 +234,78 @@ export default function PraeLuxTool() {
     if (stepIndex === 2) {
       return (
         <div className="product-list">
-          {form.productChanges.map((change, index) => (
-            <section className="product-editor" key={change.id}>
-              <div className="product-editor-head">
-                <span>{index + 1}</span>
-                <input
-                  aria-label={`Baustein ${index + 1}`}
-                  value={change.title}
-                  onChange={(event) => updateProduct(index, { title: event.target.value })}
-                />
-                <button
-                  type="button"
-                  className="quiet-action"
-                  onClick={() => removeProduct(index)}
-                  disabled={form.productChanges.length <= 1}
-                >
-                  Entfernen
-                </button>
-              </div>
-              <div className="field-grid compact">
-                <TextField
-                  label="Alt"
-                  value={change.oldProduct}
-                  onChange={(value) => updateProduct(index, { oldProduct: value })}
-                  placeholder="bestehender Tarif"
-                />
-                <TextField
-                  label="Neu"
-                  value={change.newProduct}
-                  onChange={(value) => updateProduct(index, { newProduct: value })}
-                  placeholder="empfohlener Tarif"
-                />
-                <TextField
-                  label="Monatlicher Effekt"
-                  value={change.monthlyEffect}
-                  onChange={(value) => updateProduct(index, { monthlyEffect: value })}
-                  inputMode="decimal"
-                  placeholder="18,50 €"
-                />
-                <SelectField
-                  label="Wirkung"
-                  value={change.effectType}
-                  onChange={(value) => updateProduct(index, { effectType: value as ProductEffectType })}
-                >
-                  {effectOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </SelectField>
-              </div>
-            </section>
-          ))}
+          {form.productChanges.map((change, index) => {
+            const preview = deriveProductEffect(change)
+            const isAutoCalculated = preview.effectSource === 'calculated'
+            return (
+              <section className="product-editor" key={change.id}>
+                <div className="product-editor-head">
+                  <span>{index + 1}</span>
+                  <input
+                    aria-label={`Baustein ${index + 1}`}
+                    value={change.title}
+                    onChange={(event) => updateProduct(index, { title: event.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="quiet-action"
+                    onClick={() => removeProduct(index)}
+                    disabled={form.productChanges.length <= 1}
+                  >
+                    Entfernen
+                  </button>
+                </div>
+                <div className="field-grid product-fields">
+                  <TextField
+                    label="Aktuell"
+                    value={change.oldProduct}
+                    onChange={(value) => updateProduct(index, { oldProduct: value })}
+                    placeholder="aktuelle Krankenkasse / Tarif"
+                  />
+                  <TextField
+                    label="Aktueller Beitrag mtl."
+                    value={change.oldMonthly}
+                    onChange={(value) => updateProduct(index, { oldMonthly: value })}
+                    inputMode="decimal"
+                    placeholder="245,00 €"
+                  />
+                  <TextField
+                    label="Neu"
+                    value={change.newProduct}
+                    onChange={(value) => updateProduct(index, { newProduct: value })}
+                    placeholder="neue Krankenkasse / Tarif"
+                  />
+                  <TextField
+                    label="Neuer Beitrag mtl."
+                    value={change.newMonthly}
+                    onChange={(value) => updateProduct(index, { newMonthly: value })}
+                    inputMode="decimal"
+                    placeholder="198,00 €"
+                  />
+                  <TextField
+                    label="Manueller Effekt"
+                    value={change.monthlyEffect}
+                    onChange={(value) => updateProduct(index, { monthlyEffect: value })}
+                    inputMode="decimal"
+                    placeholder="nur wenn Beiträge fehlen"
+                  />
+                  <SelectField
+                    label="Wirkung"
+                    value={change.effectType}
+                    onChange={(value) => updateProduct(index, { effectType: value as ProductEffectType })}
+                    disabled={isAutoCalculated}
+                  >
+                    {effectOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </SelectField>
+                </div>
+                <ProductEffectPreview preview={preview} />
+              </section>
+            )
+          })}
           <button type="button" className="secondary-action add-action" onClick={addProduct}>
             Baustein hinzufügen
           </button>
@@ -316,6 +339,13 @@ export default function PraeLuxTool() {
               placeholder="optional"
             />
             <TextField
+              label="Allgemeiner Zinssatz p.a."
+              value={form.generalInterestRate}
+              onChange={(value) => updateField('generalInterestRate', value)}
+              inputMode="decimal"
+              placeholder="3,00 %"
+            />
+            <TextField
               label="Optionales Potenzial bis Zielalter"
               value={form.optionalPotentialUntilTarget}
               onChange={(value) => updateField('optionalPotentialUntilTarget', value)}
@@ -334,6 +364,7 @@ export default function PraeLuxTool() {
               label="Optionales Potenzial"
               value={formatOptionalCurrency(calculated.optionalPotentialUntilTarget, { plus: true })}
             />
+            <Readout label="Zinssatz p.a." value={formatInterestRate(calculated.generalInterestRate)} />
           </div>
           <label className="field full-field">
             <span>Fazit-Zusatz</span>
@@ -360,6 +391,7 @@ export default function PraeLuxTool() {
             label="Optionales Potenzial"
             value={formatOptionalCurrency(calculated.optionalPotentialUntilTarget, { plus: true })}
           />
+          <Readout label="Zinssatz p.a." value={formatInterestRate(calculated.generalInterestRate)} />
         </div>
         <div className="quality-list">
           {data.qualityChecks.map((check) => (
@@ -509,14 +541,15 @@ type SelectFieldProps = {
   label: string
   value: string
   onChange: (value: string) => void
+  disabled?: boolean
   children: React.ReactNode
 }
 
-function SelectField({ label, value, onChange, children }: SelectFieldProps) {
+function SelectField({ label, value, onChange, disabled = false, children }: SelectFieldProps) {
   return (
     <label className="field">
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
         {children}
       </select>
     </label>
@@ -540,6 +573,22 @@ function Readout({
   )
 }
 
+function ProductEffectPreview({ preview }: { preview: ReturnType<typeof deriveProductEffect> }) {
+  const source =
+    preview.effectSource === 'calculated'
+      ? 'automatisch aus Alt-/Neu-Beitrag'
+      : preview.effectSource === 'manual'
+        ? 'manuelle Wirkung'
+        : 'Alt- und Neu-Beitrag eintragen'
+
+  return (
+    <div className={`product-effect ${preview.effectType}`}>
+      <span>{source}</span>
+      <strong>{preview.effectLabel}</strong>
+    </div>
+  )
+}
+
 function formatMonthly(value: number | undefined) {
   return value === undefined ? 'fehlt' : `${formatCurrency(value)} mtl.`
 }
@@ -557,4 +606,12 @@ function formatImpact(value: number | undefined, yearly = false) {
 function formatYears(value: number | undefined, targetAge: number) {
   if (value === undefined) return `bis ${targetAge} offen`
   return value === 1 ? `1 Jahr bis ${targetAge}` : `${value} Jahre bis ${targetAge}`
+}
+
+function formatInterestRate(value: number | undefined) {
+  if (value === undefined) return 'ohne Zins'
+  return `${new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)} %`
 }
