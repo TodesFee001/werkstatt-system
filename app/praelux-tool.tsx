@@ -265,35 +265,47 @@ export default function PraeLuxTool() {
     if (stepIndex === 1) {
       return (
         <>
+          <div className="step-note">
+            <strong>Pflicht:</strong> Trage den aktuellen Gesamtbeitrag und den empfohlenen Gesamtbeitrag ein. Es reicht
+            jeweils monatlich oder jährlich; das andere Feld wird automatisch berechnet.
+          </div>
           <div className="field-grid">
             <TextField
-              label="Bestand monatlich"
+              label="Aktuell gesamt mtl."
               value={form.existingMonthly}
               onChange={(value) => updateField('existingMonthly', value)}
               inputMode="decimal"
               placeholder="245,00 €"
+              help="Was zahlt der Mandant aktuell insgesamt pro Monat?"
             />
             <TextField
-              label="Bestand jährlich"
+              label="Aktuell gesamt p.a."
               value={form.existingYearly}
               onChange={(value) => updateField('existingYearly', value)}
               inputMode="decimal"
               placeholder="automatisch, wenn leer"
+              help="Nur ausfüllen, wenn der Jahreswert bekannt ist. Sonst leer lassen."
             />
             <TextField
-              label="Empfohlen monatlich"
+              label="Neu gesamt mtl."
               value={form.recommendedMonthly}
               onChange={(value) => updateField('recommendedMonthly', value)}
               inputMode="decimal"
               placeholder="198,00 €"
+              help="Was kostet das empfohlene neue Konzept insgesamt pro Monat?"
             />
             <TextField
-              label="Empfohlen jährlich"
+              label="Neu gesamt p.a."
               value={form.recommendedYearly}
               onChange={(value) => updateField('recommendedYearly', value)}
               inputMode="decimal"
               placeholder="automatisch, wenn leer"
+              help="Nur ausfüllen, wenn der Jahreswert bekannt ist. Sonst leer lassen."
             />
+          </div>
+          <div className="step-note secondary-note">
+            Wenn du die Beiträge lieber einzeln je Produkt einträgst, nutze Schritt 3 und klicke dort auf
+            <strong> Summen übernehmen</strong>.
           </div>
           <div className="readout-grid">
             <Readout label="Bestand p.a." value={formatYearly(calculated.existingYearly)} />
@@ -611,11 +623,12 @@ type TextFieldProps = {
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  help?: string
   type?: string
   inputMode?: 'text' | 'decimal' | 'numeric'
 }
 
-function TextField({ label, value, onChange, placeholder, type = 'text', inputMode = 'text' }: TextFieldProps) {
+function TextField({ label, value, onChange, placeholder, help, type = 'text', inputMode = 'text' }: TextFieldProps) {
   return (
     <label className="field">
       <span>{label}</span>
@@ -626,6 +639,7 @@ function TextField({ label, value, onChange, placeholder, type = 'text', inputMo
         placeholder={placeholder}
         inputMode={inputMode}
       />
+      {help && <em>{help}</em>}
     </label>
   )
 }
