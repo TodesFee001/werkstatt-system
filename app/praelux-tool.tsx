@@ -336,6 +336,7 @@ export default function PraeLuxTool() {
           {form.productChanges.map((change, index) => {
             const preview = deriveProductEffect(change)
             const isAutoCalculated = preview.effectSource === 'calculated'
+            const placeholders = getProductPlaceholders(change.title)
             return (
               <section className="product-editor" key={change.id}>
                 <div className="product-editor-head">
@@ -359,7 +360,7 @@ export default function PraeLuxTool() {
                     label="Aktuell"
                     value={change.oldProduct}
                     onChange={(value) => updateProduct(index, { oldProduct: value })}
-                    placeholder="aktuelle Krankenkasse / Tarif"
+                    placeholder={placeholders.oldProduct}
                   />
                   <TextField
                     label="Akt. Beitrag mtl."
@@ -372,7 +373,7 @@ export default function PraeLuxTool() {
                     label="Neu"
                     value={change.newProduct}
                     onChange={(value) => updateProduct(index, { newProduct: value })}
-                    placeholder="neue Krankenkasse / Tarif"
+                    placeholder={placeholders.newProduct}
                   />
                   <TextField
                     label="Neuer Beitrag mtl."
@@ -700,6 +701,50 @@ function formatMonthly(value: number | undefined) {
 
 function formatYearly(value: number | undefined) {
   return value === undefined ? 'fehlt' : formatCurrency(value, { yearly: true })
+}
+
+function getProductPlaceholders(title: string) {
+  const normalized = title.trim().toLocaleLowerCase('de-DE')
+
+  if (normalized.includes('krankenkasse')) {
+    return {
+      oldProduct: 'aktuelle Krankenkasse',
+      newProduct: 'neue Krankenkasse',
+    }
+  }
+
+  if (normalized.includes('haftpflicht')) {
+    return {
+      oldProduct: 'aktueller Haftpflicht-Tarif',
+      newProduct: 'neuer Haftpflicht-Tarif',
+    }
+  }
+
+  if (normalized.includes('zahn')) {
+    return {
+      oldProduct: 'aktueller Zahnzusatz-Tarif',
+      newProduct: 'neuer Zahnzusatz-Tarif',
+    }
+  }
+
+  if (normalized.includes('rechtsschutz')) {
+    return {
+      oldProduct: 'aktueller Rechtsschutz-Tarif',
+      newProduct: 'neuer Rechtsschutz-Tarif',
+    }
+  }
+
+  if (normalized.includes('altersvorsorge')) {
+    return {
+      oldProduct: 'aktueller Altersvorsorge-Vertrag',
+      newProduct: 'neuer Altersvorsorge-Vertrag',
+    }
+  }
+
+  return {
+    oldProduct: 'aktueller Anbieter / Tarif',
+    newProduct: 'neuer Anbieter / Tarif',
+  }
 }
 
 function formatImpact(value: number | undefined, yearly = false) {
