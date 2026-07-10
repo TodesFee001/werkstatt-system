@@ -1,22 +1,16 @@
+import type { Metadata } from 'next'
+import type { ReactNode } from 'react'
 import './globals.css'
-import { ReactNode } from 'react'
-import AppShell from './components/AppShell'
 
-export const metadata = {
-  title: 'Werkstatt CRM',
-  description: 'Werkstattverwaltung',
+export const metadata: Metadata = {
+  title: 'PraeLux Entscheidungsübersicht',
+  description: 'Mandantenverständliche Finanzübersicht als PNG',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: ReactNode
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="de">
-      <body>
-        <AppShell>{children}</AppShell>
-      </body>
+      <body>{children}</body>
     </html>
   )
 }
