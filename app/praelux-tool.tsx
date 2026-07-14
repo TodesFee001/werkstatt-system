@@ -428,12 +428,6 @@ export default function PraeLuxTool() {
               />
             </fieldset>
           </div>
-          <div className="readout-grid">
-            <Readout label="Bestand p.a." value={formatYearly(calculated.existingYearly)} />
-            <Readout label="Empfehlung p.a." value={formatYearly(calculated.recommendedYearly)} />
-            <Readout label="Veränderung mtl." value={formatImpact(calculated.directMonthly)} tone="strong" />
-            <Readout label="Veränderung p.a." value={formatImpact(calculated.directYearly, true)} tone="strong" />
-          </div>
         </>
       )
     }
@@ -818,10 +812,6 @@ function ProductEffectPreview({ preview }: { preview: ReturnType<typeof derivePr
 
 function formatMonthly(value: number | undefined) {
   return value === undefined ? 'fehlt' : `${formatCurrency(value)} mtl.`
-}
-
-function formatYearly(value: number | undefined) {
-  return value === undefined ? 'fehlt' : formatCurrency(value, { yearly: true })
 }
 
 function getProductPlaceholders(title: string) {
