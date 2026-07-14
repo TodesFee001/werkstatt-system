@@ -250,14 +250,14 @@ export function calculatePraeLuxForm(form: PraeLuxFormData): PraeLuxCalculatedVa
         ? directMonthly * 12
         : undefined
 
+  const generalInterestRate = parsePercentInput(form.generalInterestRate)
   const optimizedMonthlySaving = parseMoneyInput(form.optimizedMonthlySaving) ?? directMonthly
   const pureSavingUntilTarget =
     optimizedMonthlySaving !== undefined && remainingYears !== undefined
-      ? optimizedMonthlySaving * 12 * remainingYears
+      ? calculateMonthlySavingsPotential(optimizedMonthlySaving, remainingYears, generalInterestRate)
       : undefined
 
   const optionalMonthlyInvestment = parseMoneyInput(form.optionalMonthlyInvestment)
-  const generalInterestRate = parsePercentInput(form.generalInterestRate)
   const optionalPotentialUntilTarget =
     optionalMonthlyInvestment !== undefined && remainingYears !== undefined
       ? calculateMonthlySavingsPotential(optionalMonthlyInvestment, remainingYears, generalInterestRate)
@@ -625,9 +625,9 @@ function buildLongTermSaving(calculated: PraeLuxCalculatedValues): LongTermSavin
 }
 
 function buildMonthlyEquivalentNote(total: number, calculated: PraeLuxCalculatedValues) {
-  const months = calculationMonths(calculated.remainingYears)
+  const years = calculationYears(calculated.remainingYears)
 
-  if (months === undefined) return `Monatswert nach Geburtsdatum und Zielalter berechenbar.`
+  if (years === undefined) return `Monatswert nach Anlagehorizont berechenbar.`
 
   const annualRate =
     calculated.generalInterestRate !== undefined && calculated.generalInterestRate > 0
@@ -635,8 +635,8 @@ function buildMonthlyEquivalentNote(total: number, calculated: PraeLuxCalculated
       : undefined
   const monthlyEquivalent =
     annualRate === undefined
-      ? total / months
-      : calculateMonthlyDepositForTarget(total, months, annualRate)
+      ? total / (years * 12)
+      : calculateMonthlyDepositForTarget(total, years, annualRate)
 
   if (annualRate !== undefined) {
     return `Dies entspricht ca. ${formatCurrency(monthlyEquivalent)} pro Monat bei ${formatPercent(
@@ -729,24 +729,29 @@ function hasProductContent(change: EditableProductChange) {
 }
 
 function calculateMonthlySavingsPotential(monthlyAmount: number, years: number, annualRate: number | undefined) {
-  const months = Math.max(0, Math.round(years * 12))
-  if (months === 0) return 0
-  if (annualRate === undefined || annualRate <= 0) return monthlyAmount * months
-  const monthlyRate = annualRate / 100 / 12
-  return monthlyAmount * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate)
+  const fullYears = calculationYears(years)
+  if (fullYears === undefined) return 0
+  if (annualRate === undefined || annualRate <= 0) return monthlyAmount * 12 * fullYears
+  return monthlyAmount * calculateAnnualAdvanceSavingsFactor(fullYears, annualRate / 100)
 }
 
-function calculateMonthlyDepositForTarget(targetValue: number, months: number, annualRate: number) {
-  if (months <= 0) return 0
-  const monthlyRate = annualRate / 100 / 12
-  if (monthlyRate <= 0) return targetValue / months
-  return targetValue / ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate)
+function calculateMonthlyDepositForTarget(targetValue: number, years: number, annualRate: number) {
+  const fullYears = calculationYears(years)
+  if (fullYears === undefined) return 0
+  if (annualRate <= 0) return targetValue / (fullYears * 12)
+  return targetValue / calculateAnnualAdvanceSavingsFactor(fullYears, annualRate / 100)
 }
 
-function calculationMonths(years: number | undefined) {
+function calculateAnnualAdvanceSavingsFactor(years: number, annualRate: number) {
+  // Monatliche vorschuessige Einzahlung, Zinsperiode jaehrlich, Zinsansammlung am Jahresende.
+  const yearlyAdvanceDepositFactor = 12 + annualRate * 6.5
+  return yearlyAdvanceDepositFactor * ((Math.pow(1 + annualRate, years) - 1) / annualRate)
+}
+
+function calculationYears(years: number | undefined) {
   if (years === undefined) return undefined
-  const months = Math.max(0, Math.round(years * 12))
-  return months > 0 ? months : undefined
+  const fullYears = Math.max(0, Math.round(years))
+  return fullYears > 0 ? fullYears : undefined
 }
 
 function formatPercent(value: number) {
