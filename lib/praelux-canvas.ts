@@ -56,11 +56,11 @@ export function drawPraeLuxOverview(canvas: HTMLCanvasElement, data: OverviewDat
   drawHeader(ctx, data)
   drawFactStrip(ctx, data.facts)
   drawConceptBoxes(ctx, data)
-  drawChanges(ctx, data.changes)
-  drawLongTermSaving(ctx, data)
-  drawOptionalPotential(ctx, data.optionalPotential)
-  drawConclusion(ctx, data)
-  drawNotices(ctx, data.notices)
+  const changesBottom = drawChanges(ctx, data.changes)
+  const longTermBottom = drawLongTermSaving(ctx, data, changesBottom + 28)
+  const optionalBottom = drawOptionalPotential(ctx, data.optionalPotential, longTermBottom + 28)
+  const conclusionBottom = drawConclusion(ctx, data, optionalBottom + 28)
+  drawNotices(ctx, data.notices, conclusionBottom + 36)
   drawFooter(ctx)
 }
 
@@ -205,28 +205,38 @@ function drawBoxHeader(ctx: CanvasRenderingContext2D, rect: Rect, number: string
   drawSingleLine(ctx, title, rect.x + 56, rect.y + 36, rect.w - 76)
 }
 
-function drawChanges(ctx: CanvasRenderingContext2D, changes: ProductChange[]) {
-  drawSectionTitle(ctx, '4', 'Wesentliche Veränderungen', 70, 612, palette.gold)
-
-  const frame = { x: 70, y: 642, w: 1100, h: 520 }
-  roundedRect(ctx, frame.x, frame.y, frame.w, frame.h, 18, palette.paper, palette.gold)
+function drawChanges(ctx: CanvasRenderingContext2D, changes: ProductChange[], titleY = 612) {
+  drawSectionTitle(ctx, '4', 'Wesentliche Veränderungen', 70, titleY, palette.gold)
 
   const cards = changes.slice(0, 8)
   const gap = 14
   const columns = 2
-  const cardW = (frame.w - 40 - gap * (columns - 1)) / columns
+  const rows = Math.max(1, Math.ceil(cards.length / columns))
   const cardH = 110
+  const rowGap = 7
+  const frame = { x: 70, y: titleY + 30, w: 1100, h: 50 + rows * cardH + (rows - 1) * rowGap + 9 }
+  roundedRect(ctx, frame.x, frame.y, frame.w, frame.h, 18, palette.paper, palette.gold)
+
+  const cardW = (frame.w - 40 - gap * (columns - 1)) / columns
   cards.forEach((change, index) => {
     const col = index % columns
     const row = Math.floor(index / columns)
     const x = frame.x + 20 + col * (cardW + gap)
-    const y = frame.y + 50 + row * (cardH + 7)
+    const y = frame.y + 50 + row * (cardH + rowGap)
     drawProductCard(ctx, { x, y, w: cardW, h: cardH }, change)
   })
 
   setFont(ctx, 15, 700)
   ctx.fillStyle = palette.muted
-  ctx.fillText('Acht Kernkategorien mit Alt-Beitrag, Neu-Beitrag und Wirkung aus Mandantensicht', frame.x + 20, frame.y + 31)
+  const categorySummary =
+    cards.length === 8
+      ? 'Acht Kernkategorien'
+      : cards.length === 1
+        ? 'Eine Kernkategorie'
+        : `${cards.length} Kernkategorien`
+  ctx.fillText(`${categorySummary} mit Alt-Beitrag, Neu-Beitrag und Wirkung aus Mandantensicht`, frame.x + 20, frame.y + 31)
+
+  return frame.y + frame.h
 }
 
 function drawProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: ProductChange) {
@@ -304,10 +314,10 @@ function drawCompactProductCard(ctx: CanvasRenderingContext2D, rect: Rect, chang
   drawSingleLine(ctx, change.newMonthlyLabel, rect.x + 274, rect.y + 96, 140)
 }
 
-function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData) {
-  drawSectionTitle(ctx, '5', `Reine Beitragsersparnis bis ${data.targetAge}`, 70, 1190, palette.green)
+function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData, titleY = 1190) {
+  drawSectionTitle(ctx, '5', 'Gesamtvorteil im Anlagehorizont', 70, titleY, palette.green)
 
-  const rect = { x: 70, y: 1216, w: 1100, h: 132 }
+  const rect = { x: 70, y: titleY + 26, w: 1100, h: 132 }
   const isPresent = data.longTermSaving.status === 'present'
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 20, isPresent ? palette.greenSoft : palette.amberSoft, isPresent ? '#b7dec9' : '#ead49a')
 
@@ -344,24 +354,28 @@ function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData) {
     470,
     { lineHeight: 21, maxLines: 3 },
   )
+
+  return rect.y + rect.h
 }
 
-function drawOptionalPotential(ctx: CanvasRenderingContext2D, text: string) {
-  drawSectionTitle(ctx, '6', 'Optionales Zusatzpotenzial', 70, 1376, palette.gold)
+function drawOptionalPotential(ctx: CanvasRenderingContext2D, text: string, titleY = 1376) {
+  drawSectionTitle(ctx, '6', 'Optionales Zusatzpotenzial', 70, titleY, palette.gold)
 
-  const rect = { x: 70, y: 1400, w: 1100, h: 74 }
+  const rect = { x: 70, y: titleY + 24, w: 1100, h: 74 }
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, palette.goldSoft, '#e5cf95')
   drawSmallCircleIcon(ctx, rect.x + 48, rect.y + 37, palette.gold)
 
   setFont(ctx, 16, 700)
   ctx.fillStyle = palette.ink
   drawWrappedText(ctx, text, rect.x + 92, rect.y + 29, rect.w - 124, { lineHeight: 19, maxLines: 2 })
+
+  return rect.y + rect.h
 }
 
-function drawConclusion(ctx: CanvasRenderingContext2D, data: OverviewData) {
-  drawSectionTitle(ctx, '7', 'Fazit', 70, 1502, palette.navy)
+function drawConclusion(ctx: CanvasRenderingContext2D, data: OverviewData, titleY = 1502) {
+  drawSectionTitle(ctx, '7', 'Fazit', 70, titleY, palette.navy)
 
-  const rect = { x: 70, y: 1526, w: 1100, h: 74 }
+  const rect = { x: 70, y: titleY + 24, w: 1100, h: 74 }
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, palette.paper, palette.line)
   ctx.fillStyle = palette.navy
   roundPath(ctx, rect.x, rect.y, 126, rect.h, 18)
@@ -371,13 +385,15 @@ function drawConclusion(ctx: CanvasRenderingContext2D, data: OverviewData) {
   setFont(ctx, 16, 700)
   ctx.fillStyle = palette.ink
   drawWrappedText(ctx, data.conclusion, rect.x + 158, rect.y + 27, rect.w - 190, { lineHeight: 19, maxLines: 2 })
+
+  return rect.y + rect.h
 }
 
-function drawNotices(ctx: CanvasRenderingContext2D, notices: string[]) {
-  drawSectionTitle(ctx, '8', 'Modellannahmen & Hinweise', 70, 1636, palette.navy)
+function drawNotices(ctx: CanvasRenderingContext2D, notices: string[], titleY = 1636) {
+  drawSectionTitle(ctx, '8', 'Modellannahmen & Hinweise', 70, titleY, palette.navy)
 
   const startX = 70
-  const startY = 1660
+  const startY = titleY + 24
   const itemW = 270
   setFont(ctx, 12, 700)
   notices.slice(0, 8).forEach((notice, index) => {

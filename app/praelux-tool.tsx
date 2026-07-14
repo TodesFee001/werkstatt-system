@@ -55,7 +55,7 @@ const steps = [
     tab: 'Langfrist',
     eyebrow: 'Schritt 4',
     description:
-      'Erfasse die reine Bestandsersparnis und optionalen Monatsbetrag samt Zinssatz. Die Wirkung bis zum Zielalter wird daraus modellhaft berechnet.',
+      'Monatliche Ersparnisse werden aus der direkten Veränderung übernommen. Optionaler Monatsbetrag und Zinssatz berechnen das Zusatzpotenzial automatisch.',
   },
   { title: 'Vorschau & Export', tab: 'Export', eyebrow: 'Schritt 5' },
 ] as const
@@ -84,6 +84,7 @@ export default function PraeLuxTool() {
     message: 'PDF auswählen und Bestand, Konzept sowie Kategorien übernehmen',
   })
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const autoOptimizedSavingRef = useRef('')
   const data = useMemo(() => buildOverviewFromForm(form), [form])
   const calculated = useMemo(() => calculatePraeLuxForm(form), [form])
   const productTotals = useMemo(() => calculateProductContributionTotals(form.productChanges), [form.productChanges])
@@ -120,6 +121,20 @@ export default function PraeLuxTool() {
     }, 300)
     return () => window.clearTimeout(timeoutId)
   }, [form, isDraftReady])
+
+  useEffect(() => {
+    if (calculated.directMonthly === undefined) return
+
+    const nextValue = formatMoneyInput(calculated.directMonthly)
+    setForm((current) => {
+      const currentValue = current.optimizedMonthlySaving.trim()
+      const canUseAutoValue = currentValue === '' || currentValue === autoOptimizedSavingRef.current
+      if (!canUseAutoValue) return current
+
+      autoOptimizedSavingRef.current = nextValue
+      return current.optimizedMonthlySaving === nextValue ? current : { ...current, optimizedMonthlySaving: nextValue }
+    })
+  }, [calculated.directMonthly])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -478,20 +493,20 @@ export default function PraeLuxTool() {
                     placeholder={placeholders.oldProduct}
                   />
                   <TextField
-                    label="Akt. Beitrag mtl."
-                    value={change.oldMonthly}
-                    onChange={(value) => updateProduct(index, { oldMonthly: value })}
-                    inputMode="decimal"
-                    placeholder="245,00 €"
-                  />
-                  <TextField
                     label="Neu"
                     value={change.newProduct}
                     onChange={(value) => updateProduct(index, { newProduct: value })}
                     placeholder={placeholders.newProduct}
                   />
                   <TextField
-                    label="Neuer Beitrag mtl."
+                    label="Aktueller Beitrag mtl."
+                    value={change.oldMonthly}
+                    onChange={(value) => updateProduct(index, { oldMonthly: value })}
+                    inputMode="decimal"
+                    placeholder="245,00 €"
+                  />
+                  <TextField
+                    label="Neuer Beitrag monatlich"
                     value={change.newMonthly}
                     onChange={(value) => updateProduct(index, { newMonthly: value })}
                     inputMode="decimal"
@@ -533,18 +548,11 @@ export default function PraeLuxTool() {
         <>
           <div className="field-grid">
             <TextField
-              label="Optimierte Bestandsersparnis mtl."
+              label="Monatliche Ersparnisse"
               value={form.optimizedMonthlySaving}
               onChange={(value) => updateField('optimizedMonthlySaving', value)}
               inputMode="decimal"
-              placeholder="42,00 €"
-            />
-            <TextField
-              label="Reine Ersparnis bis Zielalter"
-              value={form.pureSavingUntilTarget}
-              onChange={(value) => updateField('pureSavingUntilTarget', value)}
-              inputMode="decimal"
-              placeholder="automatisch, wenn leer"
+              placeholder="automatisch aus Schritt 2"
             />
             <TextField
               label="Optionaler Monatsbetrag"
@@ -560,16 +568,9 @@ export default function PraeLuxTool() {
               inputMode="decimal"
               placeholder="3,00 %"
             />
-            <TextField
-              label="Optionales Potenzial bis Zielalter"
-              value={form.optionalPotentialUntilTarget}
-              onChange={(value) => updateField('optionalPotentialUntilTarget', value)}
-              inputMode="decimal"
-              placeholder="automatisch, wenn leer"
-            />
           </div>
           <div className="readout-grid">
-            <Readout label="Restlaufzeit" value={formatYears(calculated.remainingYears, calculated.targetAge)} />
+            <Readout label="Anlagehorizont" value={formatHorizon(calculated.remainingYears)} />
             <Readout
               label="Reine Beitragsersparnis"
               value={formatOptionalCurrency(calculated.pureSavingUntilTarget, { plus: true })}
@@ -704,7 +705,7 @@ export default function PraeLuxTool() {
             <Readout label="Empfehlung mtl." value={formatMonthly(calculated.recommendedMonthly)} />
             <Readout label="Direkte Veränderung" value={formatImpact(calculated.directMonthly)} tone="strong" />
             <Readout
-              label={`Ersparnis bis ${calculated.targetAge}`}
+              label="Langfristiger Vorteil"
               value={formatOptionalCurrency(calculated.pureSavingUntilTarget, { plus: true })}
               tone="positive"
             />
@@ -894,9 +895,9 @@ function formatImpact(value: number | undefined, yearly = false) {
   return `Mehrbeitrag: ${formatCurrency(Math.abs(value), { yearly })}`
 }
 
-function formatYears(value: number | undefined, targetAge: number) {
-  if (value === undefined) return `bis ${targetAge} offen`
-  return value === 1 ? `1 Jahr bis ${targetAge}` : `${value} Jahre bis ${targetAge}`
+function formatHorizon(value: number | undefined) {
+  if (value === undefined) return 'offen'
+  return value === 1 ? '1 Jahr' : `${value} Jahre`
 }
 
 function formatInterestRate(value: number | undefined) {

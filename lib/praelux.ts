@@ -234,7 +234,8 @@ export function createEmptyPraeLuxForm(): PraeLuxFormData {
 export function calculatePraeLuxForm(form: PraeLuxFormData): PraeLuxCalculatedValues {
   const age = calculateAgeFromIsoDate(form.birthDate)
   const targetAge = parseInteger(form.targetAge) ?? DEFAULT_TARGET_AGE
-  const remainingYears = age !== undefined ? Math.max(0, targetAge - age) : undefined
+  const derivedRemainingYears = age !== undefined ? Math.max(0, targetAge - age) : undefined
+  const remainingYears = parseHorizonYears(form.horizon, age) ?? derivedRemainingYears
 
   const existing = calculateConcept(form.existingMonthly, form.existingYearly)
   const recommended = calculateConcept(form.recommendedMonthly, form.recommendedYearly)
@@ -249,22 +250,18 @@ export function calculatePraeLuxForm(form: PraeLuxFormData): PraeLuxCalculatedVa
         ? directMonthly * 12
         : undefined
 
-  const optimizedMonthlySaving = parseMoneyInput(form.optimizedMonthlySaving)
-  const explicitPureSaving = parseMoneyInput(form.pureSavingUntilTarget)
+  const optimizedMonthlySaving = parseMoneyInput(form.optimizedMonthlySaving) ?? directMonthly
   const pureSavingUntilTarget =
-    explicitPureSaving ??
-    (optimizedMonthlySaving !== undefined && remainingYears !== undefined
+    optimizedMonthlySaving !== undefined && remainingYears !== undefined
       ? optimizedMonthlySaving * 12 * remainingYears
-      : undefined)
+      : undefined
 
   const optionalMonthlyInvestment = parseMoneyInput(form.optionalMonthlyInvestment)
   const generalInterestRate = parsePercentInput(form.generalInterestRate)
-  const explicitOptionalPotential = parseMoneyInput(form.optionalPotentialUntilTarget)
   const optionalPotentialUntilTarget =
-    explicitOptionalPotential ??
-    (optionalMonthlyInvestment !== undefined && remainingYears !== undefined
+    optionalMonthlyInvestment !== undefined && remainingYears !== undefined
       ? calculateMonthlySavingsPotential(optionalMonthlyInvestment, remainingYears, generalInterestRate)
-      : undefined)
+      : undefined
 
   return {
     age,
@@ -304,9 +301,9 @@ export function buildOverviewFromForm(form: PraeLuxFormData): OverviewData {
   )
   const impact = buildImpact(calculated.directMonthly, calculated.directYearly)
   const changes = buildProductChanges(form.productChanges)
-  const longTermSaving = buildLongTermSaving(form, calculated)
-  const optionalPotential = buildOptionalPotential(form, calculated)
-  const conclusion = buildConclusion(form, impact, longTermSaving, calculated)
+  const longTermSaving = buildLongTermSaving(calculated)
+  const optionalPotential = buildOptionalPotential(calculated)
+  const conclusion = buildConclusion(form, impact, longTermSaving)
   const horizonValue = cleanText(form.horizon) || buildHorizonLabel(calculated)
 
   const facts: FactField[] = [
@@ -352,7 +349,7 @@ export function buildOverviewFromForm(form: PraeLuxFormData): OverviewData {
     optionalPotential,
     conclusion,
     notices: [
-      `Laufzeit modellhaft bis ${calculated.targetAge}`,
+      buildRuntimeNotice(calculated),
       buildLongTermSavingNotice(calculated),
       'Optionaler Zinssatz ist modellhaft',
       'Neue Bausteine nicht in reiner Beitragsersparnis enthalten',
@@ -371,7 +368,7 @@ export function buildOverviewFromForm(form: PraeLuxFormData): OverviewData {
       { label: 'Empfehlung', ok: recommended.monthly !== undefined || recommended.yearly !== undefined },
       { label: 'Direkte Veränderung', ok: impact.type !== 'missing' },
       { label: 'Produkte', ok: changes.some((change) => change.effectType !== 'missing') },
-      { label: 'Ersparnis bis Zielalter', ok: longTermSaving.status === 'present' },
+      { label: 'Langfristwirkung', ok: longTermSaving.status === 'present' },
     ],
   }
 }
@@ -610,17 +607,7 @@ function buildProductEffectLabel(value: number | undefined, type: ProductEffectT
   return `${formatCurrency(value)} mtl.`
 }
 
-function buildLongTermSaving(form: PraeLuxFormData, calculated: PraeLuxCalculatedValues): LongTermSaving {
-  const explicit = parseMoneyInput(form.pureSavingUntilTarget)
-  if (explicit !== undefined) {
-    return {
-      value: explicit,
-      label: formatCurrency(explicit, { plus: explicit >= 0 }),
-      status: 'present',
-      note: buildMonthlyEquivalentNote(explicit, calculated),
-    }
-  }
-
+function buildLongTermSaving(calculated: PraeLuxCalculatedValues): LongTermSaving {
   if (calculated.pureSavingUntilTarget !== undefined && calculated.optimizedMonthlySaving !== undefined) {
     return {
       value: calculated.pureSavingUntilTarget,
@@ -633,7 +620,7 @@ function buildLongTermSaving(form: PraeLuxFormData, calculated: PraeLuxCalculate
   return {
     label: CHECK,
     status: 'check',
-    note: 'Bitte optimierte Bestandsersparnis und Geburtsdatum erfassen.',
+    note: 'Bitte monatliche Ersparnisse und Anlagehorizont erfassen.',
   }
 }
 
@@ -668,15 +655,17 @@ function buildLongTermSavingNotice(calculated: PraeLuxCalculatedValues) {
   return 'Beitragsersparnis ohne Zinseszins gerechnet'
 }
 
-function buildOptionalPotential(form: PraeLuxFormData, calculated: PraeLuxCalculatedValues) {
-  const explicit = parseMoneyInput(form.optionalPotentialUntilTarget)
-  if (explicit !== undefined) {
-    return `Optionales Zusatzpotenzial: ${formatCurrency(
-      explicit,
-      { plus: explicit >= 0 },
-    )} bis ${calculated.targetAge}. Der Wert ist als separate Modellannahme erfasst.`
-  }
+function buildRuntimeNotice(calculated: PraeLuxCalculatedValues) {
+  if (calculated.remainingYears === undefined) return `Anlagehorizont bis ${calculated.targetAge} offen`
+  return calculated.remainingYears === 1 ? 'Anlagehorizont: 1 Jahr' : `Anlagehorizont: ${calculated.remainingYears} Jahre`
+}
 
+function buildRuntimeLabel(calculated: PraeLuxCalculatedValues) {
+  if (calculated.remainingYears === undefined) return `bis ${calculated.targetAge}`
+  return calculated.remainingYears === 1 ? 'über 1 Jahr' : `über ${calculated.remainingYears} Jahre`
+}
+
+function buildOptionalPotential(calculated: PraeLuxCalculatedValues) {
   if (calculated.optionalPotentialUntilTarget !== undefined && calculated.optionalMonthlyInvestment !== undefined) {
     const ratePart =
       calculated.generalInterestRate !== undefined && calculated.generalInterestRate > 0
@@ -687,17 +676,16 @@ function buildOptionalPotential(form: PraeLuxFormData, calculated: PraeLuxCalcul
     )} mtl. zusätzlich eingesetzt werden, ergibt das${ratePart} ${formatCurrency(
       calculated.optionalPotentialUntilTarget,
       { plus: true },
-    )} bis ${calculated.targetAge}.`
+    )} ${buildRuntimeLabel(calculated)}.`
   }
 
-  return 'Kein optionales Zusatzpotenzial ausgewiesen, solange kein separater optionaler Monatsbetrag oder Zielwert erfasst ist.'
+  return 'Kein optionales Zusatzpotenzial ausgewiesen, solange kein separater optionaler Monatsbetrag erfasst ist.'
 }
 
 function buildConclusion(
   form: PraeLuxFormData,
   impact: Mandantenwirkung,
   longTermSaving: LongTermSaving,
-  calculated: PraeLuxCalculatedValues,
 ) {
   const custom = cleanText(form.conclusionNote)
   if (custom) return custom
@@ -705,7 +693,7 @@ function buildConclusion(
   if (impact.type === 'saving') {
     const longTermPart =
       longTermSaving.status === 'present'
-        ? ` Die reine Beitragsersparnis bis ${calculated.targetAge} ist separat ausgewiesen.`
+        ? ' Die langfristige Beitragsersparnis ist separat ausgewiesen.'
         : ' Die langfristige Wirkung sollte nach Prüfung der Bestandsbausteine ergänzt werden.'
     return `Das neue Konzept verbessert die laufende Beitragsstruktur und schafft finanziellen Spielraum. Die bestehende Absicherung wird nicht schlechtgeredet, sondern gezielt optimiert.${longTermPart}`
   }
@@ -775,6 +763,22 @@ function hasValue(value: string) {
 function parseInteger(value: string) {
   const number = Number.parseInt(value.replace(/[^\d-]/g, ''), 10)
   return Number.isFinite(number) ? number : undefined
+}
+
+function parseHorizonYears(value: string | undefined, age: number | undefined) {
+  if (!value) return undefined
+  const normalized = value.trim().toLocaleLowerCase('de-DE').replace(',', '.')
+  if (!normalized) return undefined
+
+  const matches = [...normalized.matchAll(/\d+(?:\.\d+)?/g)].map((match) => Number.parseFloat(match[0]))
+  const first = matches.find((number) => Number.isFinite(number))
+  if (first === undefined || first < 0) return undefined
+
+  if (matches.length === 1 && normalized.includes('bis') && age !== undefined && first > age && first <= 110) {
+    return Math.max(0, Math.round(first - age))
+  }
+
+  return first <= 100 ? Math.round(first) : undefined
 }
 
 function cleanText(value: string | undefined) {
