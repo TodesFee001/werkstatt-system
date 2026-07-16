@@ -1,4 +1,4 @@
-import type { FactField, OverviewData, ProductChange, ProductEffectType } from './praelux'
+import { formatCurrency, type FactField, type OverviewData, type ProductChange, type ProductEffectType } from './praelux'
 
 export const A4_WIDTH = 1240
 export const A4_HEIGHT = 1754
@@ -276,9 +276,12 @@ function drawProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: Prod
   drawSingleLine(ctx, change.newMonthlyLabel, rect.x + 54, rect.y + 139, rect.w - 66)
 
   roundedRect(ctx, rect.x + 12, rect.y + 147, rect.w - 24, 24, 12, tone.badge, tone.border)
-  setFont(ctx, 12, 900)
   ctx.fillStyle = tone.accent
-  drawSingleLine(ctx, change.effectLabel, rect.x + rect.w / 2, rect.y + 164, rect.w - 36, 'center')
+  drawFittedSingleLine(ctx, change.effectLabel, rect.x + rect.w / 2, rect.y + 164, rect.w - 36, {
+    maxSize: 12,
+    minSize: 9,
+    weight: 900,
+  }, 'center')
 }
 
 function drawCompactProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: ProductChange) {
@@ -286,34 +289,56 @@ function drawCompactProductCard(ctx: CanvasRenderingContext2D, rect: Rect, chang
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 12, tone.bg, tone.border)
   drawProductIcon(ctx, rect.x + 31, rect.y + 34, change.title, tone.accent, 18)
 
-  setFont(ctx, 16, 900)
-  ctx.fillStyle = palette.ink
-  drawWrappedText(ctx, change.title, rect.x + 64, rect.y + 24, rect.w - 238, { lineHeight: 16, maxLines: 2 })
+  const badgeW = 178
+  const badgeX = rect.x + rect.w - badgeW - 14
+  const titleW = badgeX - (rect.x + 64) - 14
 
-  roundedRect(ctx, rect.x + rect.w - 170, rect.y + 14, 156, 30, 15, tone.badge, tone.border)
-  setFont(ctx, 14, 900)
+  ctx.fillStyle = palette.ink
+  drawCompactCardTitle(ctx, change.title, rect.x + 64, rect.y + 24, titleW)
+
+  roundedRect(ctx, badgeX, rect.y + 14, badgeW, 30, 15, tone.badge, tone.border)
   ctx.fillStyle = tone.accent
-  drawSingleLine(ctx, change.effectLabel, rect.x + rect.w - 92, rect.y + 34, 142, 'center')
+  drawFittedSingleLine(ctx, tightEffectLabel(change), badgeX + badgeW / 2, rect.y + 34, badgeW - 18, {
+    maxSize: 14,
+    minSize: 8,
+    weight: 900,
+  }, 'center')
 
   setFont(ctx, 13, 900)
   ctx.fillStyle = palette.muted
   ctx.fillText('ALT', rect.x + 64, rect.y + 70)
   setFont(ctx, 14, 900)
   ctx.fillStyle = change.oldMonthly === undefined ? palette.red : palette.ink
-  drawSingleLine(ctx, change.oldProduct, rect.x + 104, rect.y + 70, 156)
+  drawFittedSingleLine(ctx, change.oldProduct, rect.x + 104, rect.y + 70, 156, {
+    maxSize: 14,
+    minSize: 9,
+    weight: 900,
+  })
   setFont(ctx, 15, 900)
   ctx.fillStyle = change.oldMonthly === undefined ? palette.red : palette.muted
-  drawSingleLine(ctx, change.oldMonthlyLabel, rect.x + 274, rect.y + 70, 140)
+  drawFittedSingleLine(ctx, change.oldMonthlyLabel, rect.x + 274, rect.y + 70, 140, {
+    maxSize: 15,
+    minSize: 9,
+    weight: 900,
+  })
 
   setFont(ctx, 13, 900)
   ctx.fillStyle = palette.muted
   ctx.fillText('NEU', rect.x + 64, rect.y + 96)
   setFont(ctx, 14, 900)
   ctx.fillStyle = change.newMonthly === undefined ? palette.red : palette.ink
-  drawSingleLine(ctx, change.newProduct, rect.x + 104, rect.y + 96, 156)
+  drawFittedSingleLine(ctx, change.newProduct, rect.x + 104, rect.y + 96, 156, {
+    maxSize: 14,
+    minSize: 9,
+    weight: 900,
+  })
   setFont(ctx, 15, 900)
   ctx.fillStyle = change.newMonthly === undefined ? palette.red : palette.muted
-  drawSingleLine(ctx, change.newMonthlyLabel, rect.x + 274, rect.y + 96, 140)
+  drawFittedSingleLine(ctx, change.newMonthlyLabel, rect.x + 274, rect.y + 96, 140, {
+    maxSize: 15,
+    minSize: 9,
+    weight: 900,
+  })
 }
 
 function drawLongTermSaving(ctx: CanvasRenderingContext2D, data: OverviewData, titleY = 1190) {
@@ -395,17 +420,17 @@ function drawNotices(ctx: CanvasRenderingContext2D, notices: string[], titleY = 
   drawSectionTitle(ctx, '8', 'Modellannahmen & Hinweise', 70, titleY, palette.navy)
 
   const startX = 70
-  const startY = titleY + 24
+  const startY = titleY + 22
   const itemW = 270
-  setFont(ctx, 12, 700)
+  setFont(ctx, 11, 700)
   notices.slice(0, 8).forEach((notice, index) => {
     const col = index % 4
     const row = Math.floor(index / 4)
     const x = startX + col * itemW
-    const y = startY + row * 32
-    drawMiniNoticeIcon(ctx, x + 7, y - 4)
+    const y = startY + row * 36
+    drawMiniNoticeIcon(ctx, x + 7, y - 3)
     ctx.fillStyle = palette.muted
-    drawSingleLine(ctx, notice, x + 22, y, 232)
+    drawWrappedText(ctx, notice, x + 22, y, 232, { lineHeight: 13, maxLines: 2 })
   })
 }
 
@@ -520,6 +545,51 @@ function toneForEffect(effectType: ProductEffectType) {
     return { bg: palette.redSoft, border: '#edc0c0', accent: palette.red, badge: '#fff0f0' }
   }
   return { bg: palette.paperSoft, border: palette.line, accent: palette.teal, badge: '#eef7f7' }
+}
+
+function tightEffectLabel(change: ProductChange) {
+  if (change.effectType === 'missing') return 'zu prüfen'
+  if (change.effect === undefined) return 'zu prüfen'
+  if (change.effectType === 'saving') return `${formatCurrency(change.effect, { plus: true })} mtl.`
+  if (change.effectType === 'extra') return `Mehr: ${formatCurrency(Math.abs(change.effect))} mtl.`
+  if (change.effectType === 'new') return `Neu: ${formatCurrency(change.effect)} mtl.`
+  if (change.effectType === 'neutral') return 'neutral'
+  return change.effectLabel
+}
+
+function drawCompactCardTitle(ctx: CanvasRenderingContext2D, title: string, x: number, y: number, maxWidth: number) {
+  setFont(ctx, 16, 900)
+  if (ctx.measureText(title).width <= maxWidth) {
+    drawSingleLine(ctx, title, x, y, maxWidth)
+    return
+  }
+
+  const words = title.split(/\s+/).filter(Boolean)
+  if (words.length <= 1) {
+    drawFittedSingleLine(ctx, title, x, y, maxWidth, { maxSize: 16, minSize: 10, weight: 900 })
+    return
+  }
+
+  const lines: string[] = []
+  let current = ''
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word
+    setFont(ctx, 14, 900)
+    if (ctx.measureText(candidate).width <= maxWidth || !current) {
+      current = candidate
+      continue
+    }
+    lines.push(current)
+    current = word
+  }
+  if (current) lines.push(current)
+
+  const first = lines[0] ?? title
+  const second = lines.length > 1 ? lines.slice(1).join(' ') : ''
+  drawFittedSingleLine(ctx, first, x, y, maxWidth, { maxSize: 14, minSize: 9, weight: 900 })
+  if (second) {
+    drawFittedSingleLine(ctx, second, x, y + 16, maxWidth, { maxSize: 14, minSize: 9, weight: 900 })
+  }
 }
 
 function drawFactIcon(ctx: CanvasRenderingContext2D, x: number, y: number, index: number, status: string) {

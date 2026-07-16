@@ -351,12 +351,12 @@ export function buildOverviewFromForm(form: PraeLuxFormData): OverviewData {
     notices: [
       buildRuntimeNotice(calculated),
       buildLongTermSavingNotice(calculated),
-      'Optionaler Zinssatz ist modellhaft',
-      'Neue Bausteine nicht in reiner Beitragsersparnis enthalten',
+      'Zinssatz modellhaft',
+      'Neue Bausteine separat bewertet',
       'Fehlende Werte bleiben markiert',
-      'Keine Garantie oder Renditezusage',
-      'Darstellung aus Mandantensicht',
-      'Ersparnisse werden als positiver Vorteil gezeigt',
+      'Keine Renditezusage',
+      'Mandantensicht',
+      'Ersparnisse positiv dargestellt',
     ],
     qualityChecks: [
       { label: 'Mandantendaten', ok: clientName !== NOT_GIVEN && calculated.age !== undefined },
@@ -649,15 +649,15 @@ function buildMonthlyEquivalentNote(total: number, calculated: PraeLuxCalculated
 
 function buildLongTermSavingNotice(calculated: PraeLuxCalculatedValues) {
   if (calculated.generalInterestRate !== undefined && calculated.generalInterestRate > 0) {
-    return `Zinseszins mit ${formatPercent(calculated.generalInterestRate)} p.a. modelliert`
+    return `Zinseszins: ${formatPercent(calculated.generalInterestRate)} p.a.`
   }
 
-  return 'Beitragsersparnis ohne Zinseszins gerechnet'
+  return 'Ohne Zinseszins gerechnet'
 }
 
 function buildRuntimeNotice(calculated: PraeLuxCalculatedValues) {
-  if (calculated.remainingYears === undefined) return `Anlagehorizont bis ${calculated.targetAge} offen`
-  return calculated.remainingYears === 1 ? 'Anlagehorizont: 1 Jahr' : `Anlagehorizont: ${calculated.remainingYears} Jahre`
+  if (calculated.remainingYears === undefined) return `Horizont bis ${calculated.targetAge}: offen`
+  return calculated.remainingYears === 1 ? 'Horizont: 1 Jahr' : `Horizont: ${calculated.remainingYears} Jahre`
 }
 
 function buildRuntimeLabel(calculated: PraeLuxCalculatedValues) {
