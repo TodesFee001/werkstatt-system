@@ -420,12 +420,37 @@ function InvestmentReadout({
 }
 
 function mergeInvestmentImport(current: InvestmentConceptForm, values: Partial<InvestmentConceptForm>) {
+  const next = { ...current, ...values }
+  if (values.insuranceMonthly && current.insuranceMonthly) {
+    next.insuranceMonthly = formatGermanNumber(
+      parseGermanNumber(current.insuranceMonthly) + parseGermanNumber(values.insuranceMonthly),
+    )
+  }
+
   return {
-    ...current,
-    ...values,
+    ...next,
     fundFacts:
       values.fundFacts && current.fundFacts
         ? `${current.fundFacts}\n${values.fundFacts}`
-        : values.fundFacts ?? current.fundFacts,
+        : next.fundFacts,
+    insuranceConcept:
+      values.insuranceConcept && current.insuranceConcept
+        ? `${current.insuranceConcept}\n${values.insuranceConcept}`
+        : next.insuranceConcept,
+    healthConcept:
+      values.healthConcept && current.healthConcept ? `${current.healthConcept}\n${values.healthConcept}` : next.healthConcept,
   }
+}
+
+function parseGermanNumber(value: string) {
+  const normalized = value.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')
+  const number = Number.parseFloat(normalized)
+  return Number.isFinite(number) ? number : 0
+}
+
+function formatGermanNumber(value: number) {
+  return new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
 }
