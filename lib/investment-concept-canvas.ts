@@ -121,30 +121,30 @@ function drawPie(ctx: CanvasRenderingContext2D, categories: InvestmentCategory[]
   ctx.fillStyle = palette.ink
   drawSingleLine(ctx, totalMonthly > 0 ? dataSafeMoney(totalMonthly) : 'offen', cx, cy + 18, 130, 'center')
 
-  drawCallout(ctx, cx - 126, cy - 98, rect.x + 140, rect.y + 112, 'Depot')
-  drawCallout(ctx, cx + 120, cy - 88, rect.x + 706, rect.y + 110, 'Versicherungen / Krankenkasse')
-  drawCallout(ctx, cx + 112, cy + 84, rect.x + 715, rect.y + 300, 'Reservehaltung / Fixkosten')
-  drawCallout(ctx, cx - 122, cy + 92, rect.x + 142, rect.y + 302, 'Altersvorsorge')
+  drawSliceGuide(ctx, cx - 126, cy - 98, cx - 214, cy - 98)
+  drawSliceGuide(ctx, cx + 120, cy - 88, cx + 214, cy - 88)
+  drawSliceGuide(ctx, cx + 112, cy + 84, cx + 214, cy + 84)
+  drawSliceGuide(ctx, cx - 122, cy + 92, cx - 214, cy + 92)
 }
 
 function drawCategoryLegend(ctx: CanvasRenderingContext2D, categories: InvestmentCategory[], rect: Rect) {
-  const startX = rect.x + 670
-  const startY = rect.y + 155
-  const itemH = 52
+  const startX = rect.x + 690
+  const startY = rect.y + 102
+  const itemH = 72
 
   categories.forEach((category, index) => {
     const y = startY + index * itemH
     ctx.fillStyle = category.color
     ctx.beginPath()
-    ctx.roundRect(startX, y - 20, 26, 26, 7)
+    ctx.roundRect(startX, y - 18, 28, 28, 7)
     ctx.fill()
 
-    setFont(ctx, 15, 900)
+    setFont(ctx, 16, 900)
     ctx.fillStyle = palette.ink
-    drawSingleLine(ctx, category.label, startX + 42, y - 3, 320)
-    setFont(ctx, 13, 800)
+    drawSingleLine(ctx, category.label, startX + 46, y - 2, 330)
+    setFont(ctx, 14, 800)
     ctx.fillStyle = palette.muted
-    drawSingleLine(ctx, category.monthlyLabel, startX + 42, y + 20, 220)
+    drawSingleLine(ctx, category.monthlyLabel, startX + 46, y + 25, 250)
   })
 }
 
@@ -329,17 +329,13 @@ function drawFooter(ctx: CanvasRenderingContext2D) {
   drawSingleLine(ctx, 'PraeLux Investmentkonzept', INVESTMENT_CANVAS_WIDTH / 2, 1734, 320, 'center')
 }
 
-function drawCallout(ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number, label: string) {
+function drawSliceGuide(ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number) {
   ctx.strokeStyle = palette.muted
-  ctx.lineWidth = 2
+  ctx.lineWidth = 1.5
   ctx.beginPath()
   ctx.moveTo(fromX, fromY)
   ctx.lineTo(toX, toY)
   ctx.stroke()
-
-  setFont(ctx, 18, 900)
-  ctx.fillStyle = palette.ink
-  drawWrappedText(ctx, label, toX + (toX < fromX ? -12 : 12), toY - 10, 220, 22, toX < fromX ? 'right' : 'left')
 }
 
 function drawSectionTitle(ctx: CanvasRenderingContext2D, number: string, title: string, x: number, y: number, color: string) {
