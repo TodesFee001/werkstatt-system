@@ -237,6 +237,7 @@ function drawProjectionLine(
   ctx.lineCap = 'butt'
 
   const last = points[points.length - 1]
+  if (last[key] <= 0) return
   const label = key === 'depot' ? 'Depot' : 'Altersvorsorge'
   setFont(ctx, 17, 900)
   ctx.fillStyle = color
@@ -244,6 +245,7 @@ function drawProjectionLine(
 }
 
 function drawChartLabels(ctx: CanvasRenderingContext2D, chart: Rect, data: InvestmentConceptData) {
+  if (data.horizonYears === undefined || data.horizonYears <= 0) return
   const horizon = Math.max(1, data.horizonYears ?? 1)
   const marks = Array.from(new Set([10, 20, horizon])).filter((year) => year > 0 && year <= horizon)
   setFont(ctx, 14, 900)
@@ -284,6 +286,12 @@ function drawSummary(ctx: CanvasRenderingContext2D, data: InvestmentConceptData)
     palette.gold,
   )
 
+  if (data.documentSummaries.length > 0) {
+    setFont(ctx, 12, 800)
+    ctx.fillStyle = palette.ink
+    drawWrappedText(ctx, data.documentSummaries.slice(0, 2).join(' | '), 70, 1654, 1100, 17, 'center')
+  }
+
   setFont(ctx, 13, 800)
   ctx.fillStyle = palette.muted
   drawSingleLine(
@@ -292,7 +300,7 @@ function drawSummary(ctx: CanvasRenderingContext2D, data: InvestmentConceptData)
       data.retirementRate,
     )} p.a. | monatlich vorschuessig, Zinsperiode jaehrlich`,
     70,
-    1666,
+    data.documentSummaries.length > 0 ? 1692 : 1666,
     1100,
     'center',
   )

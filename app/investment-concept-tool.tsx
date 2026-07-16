@@ -1,6 +1,6 @@
 'use client'
 
-import { type InputHTMLAttributes, useEffect, useMemo, useRef, useState } from 'react'
+import { type ChangeEvent, type InputHTMLAttributes, useEffect, useMemo, useRef, useState } from 'react'
 import { drawInvestmentConcept } from '@/lib/investment-concept-canvas'
 import {
   buildInvestmentConcept,
@@ -10,15 +10,32 @@ import {
   slugifyInvestmentName,
   type InvestmentConceptForm,
 } from '@/lib/investment-concept'
+import { extractInvestmentConceptImport, type InvestmentImportTarget } from '@/lib/investment-concept-import'
 
 type InvestmentField = keyof InvestmentConceptForm
+type ImportState = {
+  status: 'idle' | 'loading' | 'success' | 'error'
+  message: string
+}
 
 const DRAFT_STORAGE_KEY = 'praelux-investment-concept-draft-v1'
+const importDefaults: Record<InvestmentImportTarget, string> = {
+  depot: 'Depotstrategie als PDF übernehmen',
+  retirement: 'ALVO-/Altersvorsorge-Strategie als PDF übernehmen',
+  funds: 'Fonds-Factsheets als PDF übernehmen',
+  insurance: 'BU, Versicherung oder Krankenkasse übernehmen',
+}
 
 export default function InvestmentConceptTool() {
   const [form, setForm] = useState<InvestmentConceptForm>(() => createEmptyInvestmentConceptForm())
   const [isDraftReady, setIsDraftReady] = useState(false)
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
+  const [importStates, setImportStates] = useState<Record<InvestmentImportTarget, ImportState>>({
+    depot: { status: 'idle', message: importDefaults.depot },
+    retirement: { status: 'idle', message: importDefaults.retirement },
+    funds: { status: 'idle', message: importDefaults.funds },
+    insurance: { status: 'idle', message: importDefaults.insurance },
+  })
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const data = useMemo(() => buildInvestmentConcept(form), [form])
 
@@ -79,6 +96,12 @@ export default function InvestmentConceptTool() {
     window.localStorage.removeItem(DRAFT_STORAGE_KEY)
     setForm(createEmptyInvestmentConceptForm())
     setDraftSavedAt(null)
+    setImportStates({
+      depot: { status: 'idle', message: importDefaults.depot },
+      retirement: { status: 'idle', message: importDefaults.retirement },
+      funds: { status: 'idle', message: importDefaults.funds },
+      insurance: { status: 'idle', message: importDefaults.insurance },
+    })
   }
 
   function downloadPng() {
@@ -89,6 +112,40 @@ export default function InvestmentConceptTool() {
     link.download = `praelux-investmentkonzept-${name}.png`
     link.href = exportCanvas.toDataURL('image/png')
     link.click()
+  }
+
+  async function handleDocumentUpload(target: InvestmentImportTarget, event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.currentTarget.files ?? [])
+    event.currentTarget.value = ''
+    if (files.length === 0) return
+
+    setImportStates((current) => ({ ...current, [target]: { status: 'loading', message: 'Datei wird gelesen' } }))
+
+    try {
+      const result = await extractInvestmentConceptImport(files, target)
+      if (result.labels.length === 0) {
+        setImportStates((current) => ({
+          ...current,
+          [target]: { status: 'error', message: 'Keine passenden Daten erkannt' },
+        }))
+        return
+      }
+
+      setForm((current) => mergeInvestmentImport(current, result.values))
+      const successMessage =
+        target === 'funds'
+          ? `${result.labels.length} Factsheets übernommen`
+          : `${Array.from(new Set(result.labels)).join(', ')} übernommen`
+      setImportStates((current) => ({
+        ...current,
+        [target]: { status: 'success', message: successMessage },
+      }))
+    } catch {
+      setImportStates((current) => ({
+        ...current,
+        [target]: { status: 'error', message: 'Datei konnte nicht gelesen werden' },
+      }))
+    }
   }
 
   return (
@@ -120,6 +177,35 @@ export default function InvestmentConceptTool() {
               Erfasse die vier Bausteine aus Depot, Altersvorsorge, Reserve/Fixkosten und Versicherungen. Die Vorschau
               erzeugt daraus die Kreisaufteilung und die Kapitalentwicklung.
             </p>
+          </div>
+
+          <div className="investment-imports">
+            <InvestmentImportField
+              title="Depotstrategie"
+              state={importStates.depot}
+              accept="application/pdf,.pdf"
+              onChange={(event) => handleDocumentUpload('depot', event)}
+            />
+            <InvestmentImportField
+              title="ALVO"
+              state={importStates.retirement}
+              accept="application/pdf,.pdf"
+              onChange={(event) => handleDocumentUpload('retirement', event)}
+            />
+            <InvestmentImportField
+              title="Factsheets"
+              state={importStates.funds}
+              accept="application/pdf,.pdf"
+              multiple
+              onChange={(event) => handleDocumentUpload('funds', event)}
+            />
+            <InvestmentImportField
+              title="Versicherung / Kasse"
+              state={importStates.insurance}
+              accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg"
+              multiple
+              onChange={(event) => handleDocumentUpload('insurance', event)}
+            />
           </div>
 
           <div className="field-grid">
@@ -186,6 +272,37 @@ export default function InvestmentConceptTool() {
               placeholder="z.B. 420,00 €"
             />
           </div>
+
+          <div className="investment-detail-grid">
+            <InvestmentTextArea
+              label="Depotstrategie"
+              value={form.depotStrategy}
+              onChange={(value) => updateField('depotStrategy', value)}
+              placeholder="wird aus Anlagestrategie Langfristig DEPOT übernommen"
+            />
+            <InvestmentTextArea
+              label="Altersvorsorge-Strategie"
+              value={form.retirementStrategy}
+              onChange={(value) => updateField('retirementStrategy', value)}
+              placeholder="wird aus Anlagestrategie ALVO übernommen"
+            />
+            <InvestmentTextArea
+              label="Fonds-Factsheets"
+              value={form.fundFacts}
+              onChange={(value) => updateField('fundFacts', value)}
+              placeholder="Factsheets werden hier zusammengefasst"
+            />
+            <InvestmentTextArea
+              label="Versicherung / Krankenkasse"
+              value={[form.insuranceConcept, form.healthConcept].filter(Boolean).join('\n')}
+              onChange={(value) => {
+                const [insuranceConcept = '', ...healthParts] = value.split('\n')
+                updateField('insuranceConcept', insuranceConcept)
+                updateField('healthConcept', healthParts.join('\n'))
+              }}
+              placeholder="BU und Krankenkasse werden hier zusammengefasst"
+            />
+          </div>
         </section>
 
         <aside className="review-panel investment-summary">
@@ -241,6 +358,50 @@ function InvestmentTextField({
   )
 }
 
+function InvestmentTextArea({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+    </label>
+  )
+}
+
+function InvestmentImportField({
+  title,
+  state,
+  accept,
+  multiple = false,
+  onChange,
+}: {
+  title: string
+  state: ImportState
+  accept: string
+  multiple?: boolean
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void
+}) {
+  return (
+    <div className={`investment-import ${state.status}`}>
+      <strong>{title}</strong>
+      <span>{state.message}</span>
+      <label className={`pdf-import-action${state.status === 'loading' ? ' disabled' : ''}`}>
+        {state.status === 'loading' ? 'Liest...' : 'Importieren'}
+        <input type="file" accept={accept} multiple={multiple} onChange={onChange} disabled={state.status === 'loading'} />
+      </label>
+    </div>
+  )
+}
+
 function InvestmentReadout({
   label,
   value,
@@ -256,4 +417,15 @@ function InvestmentReadout({
       <strong>{value}</strong>
     </div>
   )
+}
+
+function mergeInvestmentImport(current: InvestmentConceptForm, values: Partial<InvestmentConceptForm>) {
+  return {
+    ...current,
+    ...values,
+    fundFacts:
+      values.fundFacts && current.fundFacts
+        ? `${current.fundFacts}\n${values.fundFacts}`
+        : values.fundFacts ?? current.fundFacts,
+  }
 }

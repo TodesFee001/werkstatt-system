@@ -326,6 +326,70 @@ textarea:focus {
   align-items: end;
 }
 
+.investment-imports {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.investment-import {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.investment-import strong,
+.investment-import span {
+  display: block;
+}
+
+.investment-import strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.investment-import span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.investment-import .pdf-import-action {
+  justify-self: start;
+}
+
+.investment-import.success {
+  border-color: rgba(23, 118, 77, 0.28);
+  background: #e8f5ed;
+}
+
+.investment-import.error {
+  border-color: rgba(169, 60, 60, 0.32);
+  background: #faeeee;
+}
+
+.investment-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  margin-top: 14px;
+}
+
+.investment-detail-grid textarea {
+  min-height: 92px;
+  font-size: 13px;
+}
+
 .investment-summary h2 {
   margin: 0 0 14px;
   color: var(--navy);
@@ -972,6 +1036,8 @@ canvas {
   .field-grid,
   .field-grid.compact,
   .field-grid.product-fields,
+  .investment-imports,
+  .investment-detail-grid,
   .concept-groups,
   .readout-grid {
     grid-template-columns: 1fr;

@@ -8,6 +8,11 @@ export type InvestmentConceptForm = {
   insuranceMonthly: string
   depotRate: string
   retirementRate: string
+  depotStrategy: string
+  retirementStrategy: string
+  fundFacts: string
+  insuranceConcept: string
+  healthConcept: string
 }
 
 export type InvestmentCategory = {
@@ -39,6 +44,7 @@ export type InvestmentConceptData = {
   retirementRate?: number
   categories: InvestmentCategory[]
   points: InvestmentProjectionPoint[]
+  documentSummaries: string[]
 }
 
 const DEFAULT_TARGET_AGE = 67
@@ -54,6 +60,11 @@ export function createEmptyInvestmentConceptForm(): InvestmentConceptForm {
     insuranceMonthly: '',
     depotRate: '',
     retirementRate: '',
+    depotStrategy: '',
+    retirementStrategy: '',
+    fundFacts: '',
+    insuranceConcept: '',
+    healthConcept: '',
   }
 }
 
@@ -119,6 +130,13 @@ export function buildInvestmentConcept(form: InvestmentConceptForm): InvestmentC
       },
     ],
     points: buildProjectionPoints(projectionYears, depotMonthly, retirementMonthly, depotRate, retirementRate),
+    documentSummaries: [
+      cleanSummary(form.depotStrategy),
+      cleanSummary(form.retirementStrategy),
+      cleanSummary(form.fundFacts),
+      cleanSummary(form.insuranceConcept),
+      cleanSummary(form.healthConcept),
+    ].filter(Boolean),
   }
 }
 
@@ -211,4 +229,8 @@ function parseInteger(value: string) {
 
 function cleanText(value: string | undefined) {
   return value?.replace(/\s+/g, ' ').trim().slice(0, 160) ?? ''
+}
+
+function cleanSummary(value: string | undefined) {
+  return value?.replace(/\s+/g, ' ').trim().slice(0, 280) ?? ''
 }
