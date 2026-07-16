@@ -32,6 +32,15 @@ type Rect = {
   h: number
 }
 
+type PieCallout = {
+  category: InvestmentCategory
+  side: 'left' | 'right'
+  anchorX: number
+  anchorY: number
+  desiredY: number
+  labelY: number
+}
+
 export function drawInvestmentConcept(canvas: HTMLCanvasElement, data: InvestmentConceptData, scale = 2) {
   canvas.width = INVESTMENT_CANVAS_WIDTH * scale
   canvas.height = INVESTMENT_CANVAS_HEIGHT * scale
@@ -90,10 +99,12 @@ function drawPie(ctx: CanvasRenderingContext2D, categories: InvestmentCategory[]
   const radius = 142
   const totalWeight = totalMonthly > 0 ? totalMonthly : categories.length
   let start = -Math.PI / 2
+  const callouts: PieCallout[] = []
 
-  categories.forEach((category) => {
+  categories.forEach((category, index) => {
     const weight = totalMonthly > 0 ? Math.max(0, category.monthly) : 1
     const slice = (weight / totalWeight) * Math.PI * 2
+    const angle = slice > 0 ? start + slice / 2 : -Math.PI / 2 + ((index + 0.5) / categories.length) * Math.PI * 2
     ctx.beginPath()
     ctx.moveTo(cx, cy)
     ctx.arc(cx, cy, radius, start, start + slice)
@@ -103,6 +114,19 @@ function drawPie(ctx: CanvasRenderingContext2D, categories: InvestmentCategory[]
     ctx.strokeStyle = palette.paper
     ctx.lineWidth = 5
     ctx.stroke()
+
+    if (weight > 0 || totalMonthly <= 0) {
+      const anchorRadius = radius + 3
+      callouts.push({
+        category,
+        side: Math.cos(angle) >= 0 ? 'right' : 'left',
+        anchorX: cx + Math.cos(angle) * anchorRadius,
+        anchorY: cy + Math.sin(angle) * anchorRadius,
+        desiredY: cy + Math.sin(angle) * (radius + 62),
+        labelY: cy + Math.sin(angle) * (radius + 62),
+      })
+    }
+
     start += slice
   })
 
@@ -121,10 +145,7 @@ function drawPie(ctx: CanvasRenderingContext2D, categories: InvestmentCategory[]
   ctx.fillStyle = palette.ink
   drawSingleLine(ctx, totalMonthly > 0 ? dataSafeMoney(totalMonthly) : 'offen', cx, cy + 18, 130, 'center')
 
-  drawSliceGuide(ctx, cx - 126, cy - 98, cx - 214, cy - 98)
-  drawSliceGuide(ctx, cx + 120, cy - 88, cx + 214, cy - 88)
-  drawSliceGuide(ctx, cx + 112, cy + 84, cx + 214, cy + 84)
-  drawSliceGuide(ctx, cx - 122, cy + 92, cx - 214, cy + 92)
+  drawPieCallouts(ctx, callouts, rect)
 }
 
 function drawCategoryLegend(ctx: CanvasRenderingContext2D, categories: InvestmentCategory[], rect: Rect) {
@@ -329,13 +350,75 @@ function drawFooter(ctx: CanvasRenderingContext2D) {
   drawSingleLine(ctx, 'PraeLux Investmentkonzept', INVESTMENT_CANVAS_WIDTH / 2, 1734, 320, 'center')
 }
 
-function drawSliceGuide(ctx: CanvasRenderingContext2D, fromX: number, fromY: number, toX: number, toY: number) {
-  ctx.strokeStyle = palette.muted
-  ctx.lineWidth = 1.5
-  ctx.beginPath()
-  ctx.moveTo(fromX, fromY)
-  ctx.lineTo(toX, toY)
-  ctx.stroke()
+function drawPieCallouts(ctx: CanvasRenderingContext2D, callouts: PieCallout[], rect: Rect) {
+  arrangePieCallouts(
+    callouts.filter((callout) => callout.side === 'left'),
+    rect.y + 92,
+    rect.y + rect.h - 86,
+    70,
+  )
+  arrangePieCallouts(
+    callouts.filter((callout) => callout.side === 'right'),
+    rect.y + 92,
+    rect.y + rect.h - 86,
+    70,
+  )
+
+  callouts.forEach((callout) => {
+    const isRight = callout.side === 'right'
+    const textX = isRight ? rect.x + 542 : rect.x + 198
+    const lineEndX = isRight ? textX - 14 : textX + 14
+    const align: CanvasTextAlign = isRight ? 'left' : 'right'
+    const maxWidth = isRight ? 132 : 176
+
+    ctx.strokeStyle = callout.category.color
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(callout.anchorX, callout.anchorY)
+    ctx.lineTo(lineEndX, callout.labelY)
+    ctx.stroke()
+
+    ctx.fillStyle = callout.category.color
+    ctx.beginPath()
+    ctx.arc(callout.anchorX, callout.anchorY, 5, 0, Math.PI * 2)
+    ctx.fill()
+
+    setFont(ctx, 16, 900)
+    ctx.fillStyle = palette.ink
+    drawSingleLine(ctx, getPieCalloutLabel(callout.category), textX, callout.labelY - 6, maxWidth, align)
+    setFont(ctx, 12, 800)
+    ctx.fillStyle = palette.muted
+    drawSingleLine(ctx, callout.category.monthlyLabel, textX, callout.labelY + 17, maxWidth, align)
+  })
+}
+
+function getPieCalloutLabel(category: InvestmentCategory) {
+  if (category.key === 'insurance') return 'Vers. / Kasse'
+  return category.shortLabel
+}
+
+function arrangePieCallouts(callouts: PieCallout[], minY: number, maxY: number, gap: number) {
+  const sorted = callouts.sort((a, b) => a.desiredY - b.desiredY)
+  let nextY = minY
+  sorted.forEach((callout) => {
+    callout.labelY = Math.max(callout.desiredY, nextY)
+    nextY = callout.labelY + gap
+  })
+
+  const overflow = sorted.length > 0 ? sorted[sorted.length - 1].labelY - maxY : 0
+  if (overflow > 0) {
+    sorted.forEach((callout) => {
+      callout.labelY -= overflow
+    })
+  }
+
+  for (let index = sorted.length - 2; index >= 0; index -= 1) {
+    sorted[index].labelY = Math.min(sorted[index].labelY, sorted[index + 1].labelY - gap)
+  }
+
+  sorted.forEach((callout) => {
+    callout.labelY = Math.min(maxY, Math.max(minY, callout.labelY))
+  })
 }
 
 function drawSectionTitle(ctx: CanvasRenderingContext2D, number: string, title: string, x: number, y: number, color: string) {
