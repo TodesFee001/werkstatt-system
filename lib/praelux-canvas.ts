@@ -24,6 +24,13 @@ const palette = {
   line: '#d9e1e8',
 }
 
+const LOWER_SECTION_Y = {
+  longTerm: 1190,
+  optional: 1376,
+  conclusion: 1502,
+  notices: 1636,
+}
+
 type TextOptions = {
   lineHeight?: number
   maxLines?: number
@@ -56,11 +63,11 @@ export function drawPraeLuxOverview(canvas: HTMLCanvasElement, data: OverviewDat
   drawHeader(ctx, data)
   drawFactStrip(ctx, data.facts)
   drawConceptBoxes(ctx, data)
-  const changesBottom = drawChanges(ctx, data.changes)
-  const longTermBottom = drawLongTermSaving(ctx, data, changesBottom + 28)
-  const optionalBottom = drawOptionalPotential(ctx, data.optionalPotential, longTermBottom + 28)
-  const conclusionBottom = drawConclusion(ctx, data, optionalBottom + 28)
-  drawNotices(ctx, data.notices, conclusionBottom + 36)
+  drawChanges(ctx, data.changes)
+  drawLongTermSaving(ctx, data, LOWER_SECTION_Y.longTerm)
+  drawOptionalPotential(ctx, data.optionalPotential, LOWER_SECTION_Y.optional)
+  drawConclusion(ctx, data, LOWER_SECTION_Y.conclusion)
+  drawNotices(ctx, data.notices, LOWER_SECTION_Y.notices)
   drawFooter(ctx)
 }
 
@@ -201,8 +208,7 @@ function drawChanges(ctx: CanvasRenderingContext2D, changes: ProductChange[], ti
   const gap = 14
   const columns = 2
   const rows = Math.max(1, Math.ceil(cards.length / columns))
-  const cardH = 110
-  const rowGap = 7
+  const { cardH, rowGap } = changeCardLayout(rows)
   const frame = { x: 70, y: titleY + 30, w: 1100, h: 50 + rows * cardH + (rows - 1) * rowGap + 9 }
   roundedRect(ctx, frame.x, frame.y, frame.w, frame.h, 18, palette.paper, palette.gold)
 
@@ -228,8 +234,15 @@ function drawChanges(ctx: CanvasRenderingContext2D, changes: ProductChange[], ti
   return frame.y + frame.h
 }
 
+function changeCardLayout(rows: number) {
+  if (rows <= 1) return { cardH: 182, rowGap: 0 }
+  if (rows === 2) return { cardH: 152, rowGap: 11 }
+  if (rows === 3) return { cardH: 132, rowGap: 9 }
+  return { cardH: 110, rowGap: 7 }
+}
+
 function drawProductCard(ctx: CanvasRenderingContext2D, rect: Rect, change: ProductChange) {
-  if (rect.h < 130) {
+  if (rect.h < 174) {
     drawCompactProductCard(ctx, rect, change)
     return
   }
