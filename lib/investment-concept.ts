@@ -30,6 +30,11 @@ export type InvestmentProjectionPoint = {
   retirement: number
 }
 
+export type InvestmentDocumentDetail = {
+  label: string
+  text: string
+}
+
 export type InvestmentConceptData = {
   clientName: string
   age?: number
@@ -44,6 +49,7 @@ export type InvestmentConceptData = {
   retirementRate?: number
   categories: InvestmentCategory[]
   points: InvestmentProjectionPoint[]
+  documentDetails: InvestmentDocumentDetail[]
   documentSummaries: string[]
 }
 
@@ -82,6 +88,15 @@ export function buildInvestmentConcept(form: InvestmentConceptForm): InvestmentC
   const projectionYears = horizonYears ?? 0
   const depotFuture = calculateAnnualAdvanceFutureValue(depotMonthly, projectionYears, depotRate)
   const retirementFuture = calculateAnnualAdvanceFutureValue(retirementMonthly, projectionYears, retirementRate)
+  const documentDetails = [
+    { label: 'Depotstrategie', text: cleanSummary(form.depotStrategy) },
+    { label: 'Altersvorsorge-Strategie', text: cleanSummary(form.retirementStrategy) },
+    { label: 'Fonds-Factsheets', text: cleanSummary(form.fundFacts) },
+    {
+      label: 'Versicherung / Krankenkasse',
+      text: cleanSummary([form.insuranceConcept, form.healthConcept].filter(Boolean).join(' | ')),
+    },
+  ]
 
   return {
     clientName: cleanText(form.clientName) || 'Investmentkonzept',
@@ -130,13 +145,8 @@ export function buildInvestmentConcept(form: InvestmentConceptForm): InvestmentC
       },
     ],
     points: buildProjectionPoints(projectionYears, depotMonthly, retirementMonthly, depotRate, retirementRate),
-    documentSummaries: [
-      cleanSummary(form.depotStrategy),
-      cleanSummary(form.retirementStrategy),
-      cleanSummary(form.fundFacts),
-      cleanSummary(form.insuranceConcept),
-      cleanSummary(form.healthConcept),
-    ].filter(Boolean),
+    documentDetails,
+    documentSummaries: documentDetails.map((detail) => detail.text).filter(Boolean),
   }
 }
 
@@ -232,5 +242,5 @@ function cleanText(value: string | undefined) {
 }
 
 function cleanSummary(value: string | undefined) {
-  return value?.replace(/\s+/g, ' ').trim().slice(0, 280) ?? ''
+  return value?.replace(/\s+/g, ' ').trim().slice(0, 520) ?? ''
 }

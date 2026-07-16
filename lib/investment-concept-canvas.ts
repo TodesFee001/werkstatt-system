@@ -3,6 +3,7 @@ import {
   formatInvestmentPercent,
   type InvestmentCategory,
   type InvestmentConceptData,
+  type InvestmentDocumentDetail,
   type InvestmentProjectionPoint,
 } from './investment-concept'
 
@@ -59,18 +60,19 @@ export function drawInvestmentConcept(canvas: HTMLCanvasElement, data: Investmen
   drawAllocation(ctx, data)
   drawProjection(ctx, data)
   drawSummary(ctx, data)
+  drawConceptDetails(ctx, data.documentDetails)
   drawFooter(ctx)
 }
 
 function drawHeader(ctx: CanvasRenderingContext2D, data: InvestmentConceptData) {
-  setFont(ctx, 46, 900)
+  setFont(ctx, 44, 900)
   ctx.fillStyle = palette.navy
-  drawSingleLine(ctx, 'Investmentkonzept', INVESTMENT_CANVAS_WIDTH / 2, 104, 900, 'center')
+  drawSingleLine(ctx, 'Investmentkonzept', INVESTMENT_CANVAS_WIDTH / 2, 88, 900, 'center')
 
   setFont(ctx, 20, 800)
   ctx.fillStyle = palette.gold
   const horizon = data.horizonYears === undefined ? 'Anlagehorizont offen' : `${data.horizonYears} Jahre bis ${data.targetAge}`
-  drawSingleLine(ctx, `${data.clientName} | ${horizon}`, INVESTMENT_CANVAS_WIDTH / 2, 146, 900, 'center')
+  drawSingleLine(ctx, `${data.clientName} | ${horizon}`, INVESTMENT_CANVAS_WIDTH / 2, 128, 900, 'center')
 
   setFont(ctx, 15, 700)
   ctx.fillStyle = palette.muted
@@ -78,25 +80,25 @@ function drawHeader(ctx: CanvasRenderingContext2D, data: InvestmentConceptData) 
     ctx,
     'Monatliche Struktur und modellhafte Entwicklung mit vorschuessiger Einzahlung und jaehrlicher Zinsansammlung.',
     INVESTMENT_CANVAS_WIDTH / 2,
-    180,
+    162,
     980,
     'center',
   )
 }
 
 function drawAllocation(ctx: CanvasRenderingContext2D, data: InvestmentConceptData) {
-  drawSectionTitle(ctx, '1', 'Aufteilung der monatlichen Struktur', 70, 250, palette.gold)
+  drawSectionTitle(ctx, '1', 'Aufteilung der monatlichen Struktur', 70, 222, palette.gold)
 
-  const rect = { x: 70, y: 280, w: 1100, h: 420 }
+  const rect = { x: 70, y: 252, w: 1100, h: 360 }
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, palette.paperSoft, palette.line)
   drawPie(ctx, data.categories, data.totalMonthly, rect)
   drawCategoryLegend(ctx, data.categories, rect)
 }
 
 function drawPie(ctx: CanvasRenderingContext2D, categories: InvestmentCategory[], totalMonthly: number, rect: Rect) {
-  const cx = rect.x + 372
-  const cy = rect.y + 210
-  const radius = 142
+  const cx = rect.x + 346
+  const cy = rect.y + rect.h / 2
+  const radius = 118
   const totalWeight = totalMonthly > 0 ? totalMonthly : categories.length
   let start = -Math.PI / 2
   const callouts: PieCallout[] = []
@@ -150,8 +152,8 @@ function drawPie(ctx: CanvasRenderingContext2D, categories: InvestmentCategory[]
 
 function drawCategoryLegend(ctx: CanvasRenderingContext2D, categories: InvestmentCategory[], rect: Rect) {
   const startX = rect.x + 690
-  const startY = rect.y + 102
-  const itemH = 72
+  const startY = rect.y + 82
+  const itemH = 62
 
   categories.forEach((category, index) => {
     const y = startY + index * itemH
@@ -160,22 +162,22 @@ function drawCategoryLegend(ctx: CanvasRenderingContext2D, categories: Investmen
     ctx.roundRect(startX, y - 18, 28, 28, 7)
     ctx.fill()
 
-    setFont(ctx, 16, 900)
+    setFont(ctx, 15, 900)
     ctx.fillStyle = palette.ink
     drawSingleLine(ctx, category.label, startX + 46, y - 2, 330)
-    setFont(ctx, 14, 800)
+    setFont(ctx, 13, 800)
     ctx.fillStyle = palette.muted
     drawSingleLine(ctx, category.monthlyLabel, startX + 46, y + 25, 250)
   })
 }
 
 function drawProjection(ctx: CanvasRenderingContext2D, data: InvestmentConceptData) {
-  drawSectionTitle(ctx, '2', 'Entwicklung Kapital / Zeit', 70, 760, palette.navy)
+  drawSectionTitle(ctx, '2', 'Entwicklung Kapital / Zeit', 70, 674, palette.navy)
 
-  const rect = { x: 70, y: 792, w: 1100, h: 620 }
+  const rect = { x: 70, y: 704, w: 1100, h: 440 }
   roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, palette.paper, palette.line)
 
-  const chart = { x: rect.x + 86, y: rect.y + 86, w: rect.w - 150, h: 420 }
+  const chart = { x: rect.x + 86, y: rect.y + 68, w: rect.w - 150, h: 286 }
   const maxValue = niceMax(Math.max(data.depotFuture, data.retirementFuture, 50000))
   drawChartGrid(ctx, chart, maxValue)
   drawProjectionLine(ctx, chart, data.points, maxValue, 'retirement', palette.green, true)
@@ -287,31 +289,25 @@ function drawChartLabels(ctx: CanvasRenderingContext2D, chart: Rect, data: Inves
 }
 
 function drawSummary(ctx: CanvasRenderingContext2D, data: InvestmentConceptData) {
-  drawSectionTitle(ctx, '3', 'Ergebnis', 70, 1478, palette.green)
+  drawSectionTitle(ctx, '3', 'Ergebnis', 70, 1198, palette.green)
 
   const gap = 18
   const w = (1100 - gap * 2) / 3
-  drawSummaryBox(ctx, { x: 70, y: 1510, w, h: 120 }, 'Depot', formatInvestmentCurrency(data.depotFuture), palette.navy)
+  drawSummaryBox(ctx, { x: 70, y: 1230, w, h: 110 }, 'Depot', formatInvestmentCurrency(data.depotFuture), palette.navy)
   drawSummaryBox(
     ctx,
-    { x: 70 + w + gap, y: 1510, w, h: 120 },
+    { x: 70 + w + gap, y: 1230, w, h: 110 },
     'Altersvorsorge',
     formatInvestmentCurrency(data.retirementFuture),
     palette.green,
   )
   drawSummaryBox(
     ctx,
-    { x: 70 + (w + gap) * 2, y: 1510, w, h: 120 },
+    { x: 70 + (w + gap) * 2, y: 1230, w, h: 110 },
     'Gesamt',
     formatInvestmentCurrency(data.totalFuture),
     palette.gold,
   )
-
-  if (data.documentSummaries.length > 0) {
-    setFont(ctx, 12, 800)
-    ctx.fillStyle = palette.ink
-    drawWrappedText(ctx, data.documentSummaries.slice(0, 2).join(' | '), 70, 1654, 1100, 17, 'center')
-  }
 
   setFont(ctx, 13, 800)
   ctx.fillStyle = palette.muted
@@ -320,9 +316,9 @@ function drawSummary(ctx: CanvasRenderingContext2D, data: InvestmentConceptData)
     `Depot ${formatInvestmentPercent(data.depotRate)} p.a. | Altersvorsorge ${formatInvestmentPercent(
       data.retirementRate,
     )} p.a. | monatlich vorschuessig, Zinsperiode jaehrlich`,
-    70,
-    data.documentSummaries.length > 0 ? 1692 : 1666,
-    1100,
+    INVESTMENT_CANVAS_WIDTH / 2,
+    1370,
+    1020,
     'center',
   )
 }
@@ -335,6 +331,45 @@ function drawSummaryBox(ctx: CanvasRenderingContext2D, rect: Rect, label: string
   setFont(ctx, 25, 900)
   ctx.fillStyle = color
   drawSingleLine(ctx, value, rect.x + 22, rect.y + 78, rect.w - 44)
+}
+
+function drawConceptDetails(ctx: CanvasRenderingContext2D, details: InvestmentDocumentDetail[]) {
+  drawSectionTitle(ctx, '4', 'Konzeptdetails', 70, 1408, palette.teal)
+
+  const colors = [palette.navy, palette.green, palette.gold, palette.teal]
+  const gap = 16
+  const cardW = (1100 - gap) / 2
+  const cardH = 128
+  const startX = 70
+  const startY = 1428
+
+  details.forEach((detail, index) => {
+    const col = index % 2
+    const row = Math.floor(index / 2)
+    drawDetailCard(
+      ctx,
+      { x: startX + col * (cardW + gap), y: startY + row * (cardH + 12), w: cardW, h: cardH },
+      detail,
+      colors[index % colors.length],
+    )
+  })
+}
+
+function drawDetailCard(ctx: CanvasRenderingContext2D, rect: Rect, detail: InvestmentDocumentDetail, color: string) {
+  roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 14, palette.paperSoft, palette.line)
+
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.roundRect(rect.x + 14, rect.y + 18, 8, rect.h - 36, 5)
+  ctx.fill()
+
+  setFont(ctx, 14, 900)
+  ctx.fillStyle = color
+  drawSingleLine(ctx, detail.label.toUpperCase(), rect.x + 36, rect.y + 36, rect.w - 62)
+
+  setFont(ctx, 14, 700)
+  ctx.fillStyle = detail.text ? palette.ink : palette.muted
+  drawWrappedText(ctx, detail.text || 'Noch nicht angegeben.', rect.x + 36, rect.y + 62, rect.w - 64, 17, 'left', 4)
 }
 
 function drawFooter(ctx: CanvasRenderingContext2D) {
@@ -422,23 +457,23 @@ function drawOriginalLogoMark(ctx: CanvasRenderingContext2D, centerX: number, ce
 function drawPieCallouts(ctx: CanvasRenderingContext2D, callouts: PieCallout[], rect: Rect) {
   arrangePieCallouts(
     callouts.filter((callout) => callout.side === 'left'),
-    rect.y + 92,
-    rect.y + rect.h - 86,
-    70,
+    rect.y + 62,
+    rect.y + rect.h - 54,
+    58,
   )
   arrangePieCallouts(
     callouts.filter((callout) => callout.side === 'right'),
-    rect.y + 92,
-    rect.y + rect.h - 86,
-    70,
+    rect.y + 62,
+    rect.y + rect.h - 54,
+    58,
   )
 
   callouts.forEach((callout) => {
     const isRight = callout.side === 'right'
-    const textX = isRight ? rect.x + 542 : rect.x + 198
+    const textX = isRight ? rect.x + 516 : rect.x + 184
     const lineEndX = isRight ? textX - 14 : textX + 14
     const align: CanvasTextAlign = isRight ? 'left' : 'right'
-    const maxWidth = isRight ? 132 : 176
+    const maxWidth = isRight ? 124 : 160
 
     ctx.strokeStyle = callout.category.color
     ctx.lineWidth = 2
@@ -452,10 +487,10 @@ function drawPieCallouts(ctx: CanvasRenderingContext2D, callouts: PieCallout[], 
     ctx.arc(callout.anchorX, callout.anchorY, 5, 0, Math.PI * 2)
     ctx.fill()
 
-    setFont(ctx, 16, 900)
+    setFont(ctx, 14, 900)
     ctx.fillStyle = palette.ink
     drawSingleLine(ctx, getPieCalloutLabel(callout.category), textX, callout.labelY - 6, maxWidth, align)
-    setFont(ctx, 12, 800)
+    setFont(ctx, 11, 800)
     ctx.fillStyle = palette.muted
     drawSingleLine(ctx, callout.category.monthlyLabel, textX, callout.labelY + 17, maxWidth, align)
   })
@@ -533,6 +568,7 @@ function drawWrappedText(
   width: number,
   lineHeight: number,
   align: CanvasTextAlign = 'left',
+  maxLines = 2,
 ) {
   const words = text.split(/\s+/)
   const lines: string[] = []
@@ -549,7 +585,15 @@ function drawWrappedText(
   if (current) lines.push(current)
 
   ctx.textAlign = align
-  lines.slice(0, 2).forEach((line, index) => {
+  const visibleLines = lines.slice(0, maxLines)
+  if (lines.length > maxLines && visibleLines.length > 0) {
+    let last = visibleLines[visibleLines.length - 1]
+    while (last.length > 3 && ctx.measureText(`${last}...`).width > width) {
+      last = last.slice(0, -2).trim()
+    }
+    visibleLines[visibleLines.length - 1] = `${last}...`
+  }
+  visibleLines.forEach((line, index) => {
     ctx.fillText(line, x, y + index * lineHeight)
   })
   ctx.textAlign = 'left'
