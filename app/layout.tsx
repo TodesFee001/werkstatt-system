@@ -3,8 +3,8 @@ import type { ReactNode } from 'react'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'PraeLux Entscheidungsübersicht',
-  description: 'Mandantenverständliche Finanzübersicht als PNG',
+  title: 'PraeLux Finanzwerkzeuge',
+  description: 'Mandantenverständliche Finanz- und Investmentkonzepte als PNG',
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -1,5 +1,5 @@
-import PraeLuxTool from './praelux-tool'
+import ToolShell from './tool-shell'
 
 export default function Page() {
-  return <PraeLuxTool />
+  return <ToolShell />
 }
