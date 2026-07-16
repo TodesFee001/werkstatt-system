@@ -345,9 +345,78 @@ function drawFooter(ctx: CanvasRenderingContext2D) {
   ctx.lineTo(1170, 1708)
   ctx.stroke()
 
+  drawOriginalLogoMark(ctx, INVESTMENT_CANVAS_WIDTH / 2 - 88, 1733, 14)
   setFont(ctx, 16, 900)
   ctx.fillStyle = palette.navy
-  drawSingleLine(ctx, 'PraeLux Investmentkonzept', INVESTMENT_CANVAS_WIDTH / 2, 1734, 320, 'center')
+  drawSingleLine(ctx, 'Investmentkonzept', INVESTMENT_CANVAS_WIDTH / 2 - 64, 1739, 260)
+}
+
+function drawOriginalLogoMark(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, radius: number) {
+  const scale = radius / 44
+  const x = (offset: number) => centerX + offset * scale
+  const y = (offset: number) => centerY + offset * scale
+
+  ctx.save()
+  ctx.fillStyle = '#202020'
+  ctx.beginPath()
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.strokeStyle = '#eeeeee'
+  ctx.lineWidth = 3 * scale
+  ctx.beginPath()
+  ctx.arc(centerX, centerY, 41.5 * scale, 0, Math.PI * 2)
+  ctx.stroke()
+
+  ctx.strokeStyle = '#777777'
+  ctx.lineWidth = 1.4 * scale
+  ctx.globalAlpha = 0.8
+  ctx.beginPath()
+  ctx.arc(centerX, centerY, 35.5 * scale, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.globalAlpha = 1
+
+  ctx.strokeStyle = '#f5f5f5'
+  ctx.lineWidth = 3 * scale
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(x(0), y(-33))
+  ctx.lineTo(x(0), y(5))
+  ctx.stroke()
+
+  ctx.fillStyle = '#f5f5f5'
+  ctx.beginPath()
+  ctx.arc(x(0), y(-34.5), 3.6 * scale, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.lineWidth = 2.4 * scale
+  ctx.beginPath()
+  ctx.moveTo(x(-8), y(-22.5))
+  ctx.lineTo(x(8), y(-22.5))
+  ctx.moveTo(x(-4), y(-15.5))
+  ctx.lineTo(x(4), y(-15.5))
+  ctx.stroke()
+
+  ctx.lineWidth = 2.6 * scale
+  ctx.beginPath()
+  ctx.moveTo(x(-11.5), y(2.5))
+  ctx.bezierCurveTo(x(-7.7), y(10), x(7.7), y(10), x(11.5), y(2.5))
+  ctx.stroke()
+
+  ctx.font = `700 ${18 * scale}px Georgia, 'Times New Roman', serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
+  ctx.fillText('P', x(-19), y(24))
+
+  ctx.strokeStyle = '#f5f5f5'
+  ctx.lineWidth = 2 * scale
+  ctx.beginPath()
+  ctx.moveTo(x(0), y(9))
+  ctx.lineTo(x(0), y(27))
+  ctx.stroke()
+
+  ctx.fillText('L', x(18), y(24))
+  ctx.restore()
 }
 
 function drawPieCallouts(ctx: CanvasRenderingContext2D, callouts: PieCallout[], rect: Rect) {

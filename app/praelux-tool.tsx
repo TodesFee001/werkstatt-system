@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { extractBasisdatenFromPdf } from '@/lib/basisdaten-pdf'
 import { extractFinanzgutachtenFromPdf, type FinanzgutachtenProductImport } from '@/lib/finanzgutachten-pdf'
@@ -637,8 +638,7 @@ export default function PraeLuxTool() {
     <main className="app-frame">
       <section className="toolbar" aria-label="PraeLux Generator">
         <div className="brand-lockup">
-          <span className="brand-mark">PraeLux</span>
-          <span className="anchor-mark" aria-hidden="true" />
+          <Image className="brand-logo" src="/praelux-logo.svg" alt="PraeLux" width={48} height={48} priority unoptimized />
           <span className="brand-subline">Gesamtvorteil</span>
         </div>
         <div className="toolbar-actions">

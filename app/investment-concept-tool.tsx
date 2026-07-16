@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { type ChangeEvent, type InputHTMLAttributes, useEffect, useMemo, useRef, useState } from 'react'
 import { drawInvestmentConcept } from '@/lib/investment-concept-canvas'
 import {
@@ -152,8 +153,7 @@ export default function InvestmentConceptTool() {
     <main className="app-frame">
       <section className="toolbar" aria-label="Investmentkonzept Generator">
         <div className="brand-lockup">
-          <span className="brand-mark">PraeLux</span>
-          <span className="anchor-mark" aria-hidden="true" />
+          <Image className="brand-logo" src="/praelux-logo.svg" alt="PraeLux" width={48} height={48} priority unoptimized />
           <span className="brand-subline">Investmentkonzept</span>
         </div>
         <div className="toolbar-actions">

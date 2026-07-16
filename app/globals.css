@@ -212,45 +212,16 @@ textarea:focus {
   min-width: 260px;
 }
 
-.brand-mark {
-  font-size: 27px;
-  font-weight: 900;
+.brand-logo {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .brand-subline {
   color: rgba(255, 255, 255, 0.78);
   font-weight: 800;
-}
-
-.anchor-mark {
-  width: 18px;
-  height: 24px;
-  border: 2px solid var(--gold);
-  border-top-width: 6px;
-  border-radius: 50% 50% 45% 45%;
-  position: relative;
-  flex: 0 0 auto;
-}
-
-.anchor-mark::before,
-.anchor-mark::after {
-  content: "";
-  position: absolute;
-  background: var(--gold);
-}
-
-.anchor-mark::before {
-  width: 2px;
-  height: 20px;
-  left: 7px;
-  top: 8px;
-}
-
-.anchor-mark::after {
-  width: 22px;
-  height: 2px;
-  left: -4px;
-  top: 15px;
 }
 
 .toolbar-actions {
